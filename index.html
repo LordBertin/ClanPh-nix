@@ -312,15 +312,10 @@
         // Ils attaquent seulement s'il y a un ennemi adjacent (distance = 1)
         let validTargets = enemies.filter(enemy => enemy.hp > 0 &&
           (Math.abs(enemy.x - hero.x) + Math.abs(enemy.y - hero.y)) === 1);
-        if (validTargets.length > 0) {
-          attackButton.disabled = false;
-          attackButton.textContent = "Attaquer";
-        } else {
-          attackButton.disabled = true;
-          attackButton.textContent = "Attaquer";
-        }
+        attackButton.disabled = (validTargets.length === 0);
+        attackButton.textContent = "Attaquer";
       } else if (hero.id === "gilmor" || hero.id === "grymyr") {
-        // Ils attaquent normalement si un ennemi est exactement à distance 3 (deux cases vides entre eux)
+        // Ils attaquent normalement si un ennemi est exactement à distance 3
         let validTargets = enemies.filter(enemy => enemy.hp > 0 &&
           (Math.abs(enemy.x - hero.x) + Math.abs(enemy.y - hero.y)) === 3);
         if (validTargets.length > 0) {
@@ -351,7 +346,8 @@
         return;
       }
       let hero = heroes[selectedHeroIndex];
-      if (hero.movesRemaining <= 0) {
+      // Si des ennemis existent encore, limiter les déplacements
+      if (enemies.length > 0 && hero.movesRemaining <= 0) {
         alert("Ce héros a déjà effectué ses 3 déplacements pour ce tour.");
         return;
       }
@@ -361,15 +357,18 @@
       else if (direction === "down") newY++;
       else if (direction === "left") newX--;
       else if (direction === "right") newX++;
-      // Vérifier limites et murs
+      // Vérifier les limites et les murs
       if (newX < 0 || newX >= gridWidth || newY < 0 || newY >= gridHeight) return;
       if (grid[newY][newX] === '#') return;
-      // Empêcher de se déplacer sur une case occupée par un autre héros vivant
+      // Empêcher le déplacement sur une case occupée par un autre héros vivant
       if (heroes.some((h, i) => h.hp > 0 && i !== selectedHeroIndex && h.x === newX && h.y === newY)) return;
-      // Appliquer le déplacement et décrémenter le compteur
+      // Appliquer le déplacement
       hero.x = newX;
       hero.y = newY;
-      hero.movesRemaining--;
+      // Si des ennemis restent, décrémenter le compteur de déplacements
+      if (enemies.length > 0) {
+        hero.movesRemaining--;
+      }
       // Si la porte est active et que le héros l'atteint, terminer le niveau
       if (doorActive && newX === doorPosition.x && newY === doorPosition.y) {
         completeLevel();
@@ -391,11 +390,12 @@
           alert("Elunara ne peut pas attaquer. Utilisez Soigner.");
           return;
         } else if (hero.id === "barad" || hero.id === "dunkeld") {
-          // Attaquer uniquement si un ennemi est adjacent (distance = 1)
+          // Barad et Dunkeld attaquent uniquement s'il y a un ennemi adjacent (distance = 1)
           let candidates = enemies.filter(enemy => enemy.hp > 0 &&
             (Math.abs(enemy.x - hero.x) + Math.abs(enemy.y - hero.y)) === 1);
           if (candidates.length > 0) {
-            candidates[0].hp -= hero.damage;
+            // Ici, l'ennemi est tué d'un coup
+            candidates[0].hp = 0;
             if (hero.id === "barad") hero.taunt = true;
           } else {
             alert("Aucun ennemi adjacent.");
@@ -412,7 +412,7 @@
               validTargets.forEach(enemy => enemy.hp -= hero.damage);
             }
           } else {
-            // S'il y a un ennemi trop proche (< 3) et que CD Def est disponible, activer CD Def
+            // Si un ennemi est trop proche (< 3) et que CD Def est disponible, activer CD Def
             let closeEnemies = enemies.filter(enemy => enemy.hp > 0 &&
               (Math.abs(enemy.x - hero.x) + Math.abs(enemy.y - hero.y)) < 3);
             if (closeEnemies.length > 0 && hero.cdDefAvailable) {
@@ -433,7 +433,7 @@
             target.hp = Math.min(target.maxHp, target.hp + hero.heal);
           }
         } else {
-          // Auto-soin de 10 HP pour les autres
+          // Pour les autres, un auto-soin de 10 HP
           hero.hp = Math.min(hero.maxHp, hero.hp + 10);
         }
       }
@@ -521,7 +521,7 @@
       if (enemies.length === 0 || enemies.every(enemy => enemy.hp <= 0)) {
         if (!doorActive) activateDoor();
       }
-      // Réinitialiser le statut des héros pour le prochain tour (3 déplacements)
+      // Réinitialiser le statut des héros pour le prochain tour (ils retrouvent 3 déplacements)
       heroes.forEach(hero => { if (hero.hp > 0) { hero.acted = false; hero.movesRemaining = 3; } });
       selectedHeroIndex = null;
       updateHeroSelection();
@@ -545,7 +545,7 @@
       return aliveHeroes[0];
     }
 
-    // Vérifier si une case est libre pour un héros
+    // Vérifier si une case est libre pour qu'un héros se déplace
     function canMove(x, y) {
       if (x < 0 || x >= gridWidth || y < 0 || y >= gridHeight) return false;
       if (grid[y][x] === '#') return false;
@@ -554,7 +554,7 @@
       return !occupiedByEnemy && !occupiedByHero;
     }
 
-    // Vérifier si une case est libre pour un ennemi (on ignore les héros ici)
+    // Vérifier si une case est libre pour qu'un ennemi se déplace
     function canMoveForEnemy(x, y) {
       if (x < 0 || x >= gridWidth || y < 0 || y >= gridHeight) return false;
       if (grid[y][x] === '#') return false;
