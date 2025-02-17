@@ -2,16 +2,30 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Le Clan Phénix</title>
   <style>
-    /* Style général */
+    /* Styles globaux */
     body {
-      margin: 0;
-      padding: 0;
       background: #000;
       color: #0f0;
       font-family: monospace;
-      text-align: center;
+      margin: 0;
+      padding: 0;
+    }
+    /* Écran d'accueil et écran de fin */
+    #menu, #gameOver {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+    #menu h1, #gameOver h1 {
+      font-size: 3em;
+      margin-bottom: 1em;
     }
     button {
       font-size: 1.5em;
@@ -20,24 +34,7 @@
       border: none;
       border-radius: 5px;
     }
-    /* Écran d'accueil */
-    #menu {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: #000;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-    }
-    #menu h1 {
-      font-size: 3em;
-      margin-bottom: 1em;
-    }
-    /* Écran de jeu */
+    /* Zone de jeu */
     #game {
       display: none;
       padding: 0.5em;
@@ -54,32 +51,37 @@
     #info {
       margin: 0.5em 0;
       font-size: 1.2em;
+      text-align: center;
     }
     #controls {
       margin-top: 0.5em;
+      text-align: center;
     }
-    /* Organisation des boutons de déplacement */
     #moveControls {
       margin-bottom: 0.5em;
     }
-    /* Boutons d'action */
-    #actionControls button {
-      background: #333;
-      color: #fff;
+    /* Panneau de sélection des héros */
+    #heroSelection {
+      margin-bottom: 0.5em;
+      text-align: center;
     }
-    /* Écran game over */
-    #gameOver {
-      display: none;
-      position: absolute;
-      top: 0; left: 0;
-      width: 100%;
-      height: 100%;
-      background: #000;
-      color: #f00;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
+    .hero-option {
+      display: inline-block;
+      padding: 5px 10px;
+      margin: 0 5px;
+      border: 1px solid #0f0;
+      cursor: pointer;
+    }
+    .hero-selected {
+      background: rgba(255,255,255,0.3);
+    }
+    .hero-acted {
+      opacity: 0.5;
+      pointer-events: none;
+    }
+    /* Écran Game Over */
+    #gameOver p {
+      font-size: 1.5em;
     }
   </style>
 </head>
@@ -89,11 +91,16 @@
     <h1>Le Clan Phénix</h1>
     <button id="startButton">Démarrer</button>
   </div>
-  
-  <!-- Écran de jeu -->
+
+  <!-- Zone de jeu -->
   <div id="game">
+    <!-- Panneau de sélection des héros -->
+    <div id="heroSelection"></div>
+    <!-- Plateau ASCII -->
     <pre id="board"></pre>
+    <!-- Informations -->
     <div id="info"></div>
+    <!-- Contrôles -->
     <div id="controls">
       <div id="moveControls">
         <button id="upButton">↑</button><br>
@@ -104,53 +111,49 @@
       <div id="actionControls">
         <button id="attackButton">Attaquer</button>
         <button id="healButton">Soigner</button>
+        <button id="passButton">Passer</button>
       </div>
     </div>
   </div>
-  
-  <!-- Écran game over -->
+
+  <!-- Écran de fin de partie -->
   <div id="gameOver">
     <h1>Game Over</h1>
     <p id="scoreText"></p>
     <button id="restartButton">Recommencer</button>
   </div>
-  
+
   <script>
     /* --- Variables globales --- */
-    let gameState = "menu"; // "menu", "playing", "gameOver"
-    let phase = "move";     // phase de la tour du héros : "move" ou "action"
-    let currentHeroIndex = 0;
-    let score = 0;
-    
     const gridWidth = 30;
     const gridHeight = 15;
-    let grid = [];         // grille du niveau (tableau 2D)
+    let grid = [];  // grille du niveau
     let doorActive = false;
     let doorPosition = {x: -1, y: -1};
-
-    // Définition des héros – chacun possède une action spéciale
-    let heroes = [
-      { id: 'barad', name: 'Barad', initial: 'B', color: 'red', hp: 100, maxHp: 100, x: 1, y: 1, range: 1, damage: 20, taunt: false },
-      { id: 'dunkeld', name: 'Dunkeld', initial: 'D', color: 'gold', hp: 100, maxHp: 100, x: 2, y: 1, range: 1, damage: 30 },
-      { id: 'gilmor', name: 'Gilmor', initial: 'G', color: 'green', hp: 100, maxHp: 100, x: 1, y: 2, range: 3, damage: 30 },
-      { id: 'grymyr', name: 'Grymyr', initial: 'G', color: 'blue', hp: 100, maxHp: 100, x: 2, y: 2, range: 1, damage: 25 },
-      { id: 'elunara', name: 'Elunara', initial: 'E', color: 'cyan', hp: 100, maxHp: 100, x: 3, y: 2, range: 1, heal: 20 }
-    ];
-    
-    // Tableau des ennemis
     let enemies = [];
-    
+    let score = 0;
+
+    // Définition des héros (leurs caractéristiques, initiale, couleur, position de départ)
+    let heroes = [
+      { id: 'barad', name: 'Barad', initial: 'B', color: 'red',    hp: 100, maxHp: 100, x: 1, y: 1, range: 1, damage: 20, taunt: false, acted: false },
+      { id: 'dunkeld', name: 'Dunkeld', initial: 'D', color: 'gold',  hp: 100, maxHp: 100, x: 2, y: 1, range: 1, damage: 30, acted: false },
+      { id: 'gilmor', name: 'Gilmor', initial: 'G', color: 'green',  hp: 100, maxHp: 100, x: 1, y: 2, range: 3, damage: 30, acted: false },
+      { id: 'grymyr', name: 'Grymyr', initial: 'G', color: 'blue',   hp: 100, maxHp: 100, x: 2, y: 2, range: 1, damage: 25, acted: false },
+      { id: 'elunara', name: 'Elunara', initial: 'E', color: 'cyan',   hp: 100, maxHp: 100, x: 3, y: 2, range: 1, heal: 20, acted: false }
+    ];
+
+    // Variable pour le héros sélectionné (index dans le tableau heroes)
+    let selectedHeroIndex = null;
+
     /* --- Génération du niveau --- */
     function generateLevel() {
       grid = [];
       for (let y = 0; y < gridHeight; y++){
         grid[y] = [];
         for (let x = 0; x < gridWidth; x++){
-          // Bords toujours des murs
-          if (y === 0 || y === gridHeight-1 || x === 0 || x === gridWidth-1) {
+          if (y === 0 || y === gridHeight - 1 || x === 0 || x === gridWidth - 1) {
             grid[y][x] = '#';
           } else {
-            // 15% de murs dans l'intérieur
             grid[y][x] = (Math.random() < 0.15) ? '#' : '.';
           }
         }
@@ -163,20 +166,20 @@
       }
       doorActive = false;
       doorPosition = {x: -1, y: -1};
-      
-      // Placer quelques ennemis (ici 5 par niveau)
+
+      // Placer quelques ennemis (par exemple 5 par niveau)
       enemies = [];
       for (let i = 0; i < 5; i++){
         let ex, ey;
         do {
           ex = Math.floor(Math.random() * gridWidth);
           ey = Math.floor(Math.random() * gridHeight);
-        } while (grid[ey][ex] !== '.' || (ex < 6 && ey < 6)); // éviter la zone de départ
+        } while (grid[ey][ex] !== '.' || (ex < 6 && ey < 6));
         enemies.push({x: ex, y: ey, hp: 50});
       }
     }
-    
-    // Positionner les héros dans la zone de départ (s’ils sont encore en vie)
+
+    // Positionner les héros dans la zone de départ et réinitialiser leur statut d'action
     function positionHeroes() {
       const startPositions = [
         {x: 1, y: 1},
@@ -189,10 +192,13 @@
         if (hero.hp > 0) {
           hero.x = startPositions[i].x;
           hero.y = startPositions[i].y;
+          hero.acted = false;
         }
       });
+      selectedHeroIndex = null;
+      updateHeroSelection();
     }
-    
+
     /* --- Rendu du plateau en ASCII --- */
     function render() {
       let displayGrid = [];
@@ -203,7 +209,7 @@
           displayGrid[y][x] = grid[y][x];
         }
       }
-      // Si la porte est activée, l'afficher (symbole O)
+      // Si la porte est active, l'afficher (symbole 'O')
       if (doorActive) {
         displayGrid[doorPosition.y][doorPosition.x] = 'O';
       }
@@ -213,14 +219,14 @@
           displayGrid[enemy.y][enemy.x] = '<span style="color: white;">X</span>';
         }
       });
-      // Placer les héros (lettre colorée – le héros actif est surligné)
+      // Placer les héros (la couleur et le surlignage pour le héros sélectionné)
       heroes.forEach((hero, index) => {
         if (hero.hp > 0) {
-          let highlight = (index === currentHeroIndex) ? 'background: rgba(255,255,255,0.3);' : '';
+          let highlight = (index === selectedHeroIndex) ? 'background: rgba(255,255,255,0.3);' : '';
           displayGrid[hero.y][hero.x] = '<span style="color:' + hero.color + ';' + highlight + ';">' + hero.initial + '</span>';
         }
       });
-      // Construire le texte HTML à afficher
+      // Construire le HTML du plateau
       let boardHtml = "";
       for (let y = 0; y < gridHeight; y++){
         for (let x = 0; x < gridWidth; x++){
@@ -230,174 +236,193 @@
       }
       document.getElementById('board').innerHTML = boardHtml;
       updateInfo();
-      updateControls();
     }
-    
-    // Affichage d'informations (tour actuel, HP, score)
+
+    // Mise à jour des informations affichées
     function updateInfo() {
       let infoDiv = document.getElementById('info');
-      if (heroes[currentHeroIndex] && heroes[currentHeroIndex].hp > 0) {
-        let hero = heroes[currentHeroIndex];
-        infoDiv.innerHTML = "Tour de " + hero.name + " (HP : " + hero.hp + "/" + hero.maxHp + ") – Phase : " + phase;
+      let infoText = "";
+      if (selectedHeroIndex !== null) {
+        let hero = heroes[selectedHeroIndex];
+        infoText += "Héros sélectionné : " + hero.name + " (HP : " + hero.hp + "/" + hero.maxHp + ")";
       } else {
-        infoDiv.innerHTML = "Aucun héros actif";
+        infoText += "Sélectionnez un héros pour agir.";
       }
-      infoDiv.innerHTML += "<br>Donjons terminés : " + score;
+      infoText += "<br>Donjons terminés : " + score;
+      infoDiv.innerHTML = infoText;
     }
-    
-    // Affichage conditionnel des boutons d'action
-    function updateControls() {
-      let hero = heroes[currentHeroIndex];
-      // Seul Elunara utilise l'action "Soigner" – pour les autres, on masque ce bouton
-      if (hero && hero.id === "elunara") {
-        document.getElementById('healButton').style.display = "inline-block";
-      } else {
-        document.getElementById('healButton').style.display = "none";
-      }
+
+    // Mise à jour du panneau de sélection des héros
+    function updateHeroSelection() {
+      const container = document.getElementById('heroSelection');
+      container.innerHTML = "";
+      heroes.forEach((hero, index) => {
+        if (hero.hp <= 0) return; // Ne pas afficher les héros morts
+        let heroDiv = document.createElement('span');
+        heroDiv.classList.add('hero-option');
+        heroDiv.style.color = hero.color;
+        heroDiv.textContent = hero.name + " (" + hero.hp + ")";
+        if (index === selectedHeroIndex) {
+          heroDiv.classList.add('hero-selected');
+        }
+        if (hero.acted) {
+          heroDiv.classList.add('hero-acted');
+        }
+        heroDiv.onclick = () => {
+          if (!hero.acted) {
+            selectedHeroIndex = index;
+            updateHeroSelection();
+            updateInfo();
+          }
+        };
+        container.appendChild(heroDiv);
+      });
     }
-    
+
     /* --- Gestion du déplacement (phase "move") --- */
     function handleMove(direction) {
-      if (phase !== "move") return;
-      let hero = heroes[currentHeroIndex];
+      if (selectedHeroIndex === null) {
+        alert("Veuillez sélectionner un héros pour agir.");
+        return;
+      }
+      let hero = heroes[selectedHeroIndex];
       let newX = hero.x;
       let newY = hero.y;
       if (direction === "up") newY--;
       else if (direction === "down") newY++;
       else if (direction === "left") newX--;
       else if (direction === "right") newX++;
-      
-      // Vérifier les limites et les murs
+      // Vérifier limites et murs
       if (newX < 0 || newX >= gridWidth || newY < 0 || newY >= gridHeight) return;
       if (grid[newY][newX] === '#') return;
-      // Éviter de se superposer à un autre héros vivant
-      if (heroes.some(h => h.hp > 0 && h.x === newX && h.y === newY)) return;
-      
+      // Empêcher le déplacement sur une case occupée par un autre héros vivant
+      if (heroes.some((h, i) => h.hp > 0 && i !== selectedHeroIndex && h.x === newX && h.y === newY)) return;
       hero.x = newX;
       hero.y = newY;
-      
-      // Si la porte est active et qu'un héros la foule, on termine le niveau
+      // Si la porte est active et que le héros l'atteint, terminer le niveau
       if (doorActive && newX === doorPosition.x && newY === doorPosition.y) {
         completeLevel();
         return;
       }
-      
-      // Passage à la phase d'action
-      phase = "action";
       render();
     }
-    
-    /* --- Gestion de l'action (phase "action") --- */
+
+    /* --- Gestion de l'action (attaque ou soin) --- */
     function handleAction(action) {
-      if (phase !== "action") return;
-      let hero = heroes[currentHeroIndex];
+      if (selectedHeroIndex === null) {
+        alert("Veuillez sélectionner un héros pour agir.");
+        return;
+      }
+      let hero = heroes[selectedHeroIndex];
       if (hero.hp <= 0) return;
-      
       if (action === "attack") {
-        // Pour chaque héros, l'attaque spéciale varie
         if (hero.id === "grymyr") {
-          // Grymyr lance un éclair : il touche tous les ennemis adjacents (distance 1)
-          let hit = false;
+          // Grymyr : lance un éclair sur tous les ennemis adjacents
           enemies.forEach(enemy => {
             if (enemy.hp > 0 && (Math.abs(enemy.x - hero.x) + Math.abs(enemy.y - hero.y)) === 1) {
               enemy.hp -= hero.damage;
-              hit = true;
             }
           });
-          // S'il n'y a pas d'ennemi à côté, aucun effet
         } else if (hero.id === "gilmor") {
-          // Gilmor, tir à distance (portée 3)
+          // Gilmor : attaque à distance (portée 3)
           let target = findNearestEnemyInRange(hero, hero.range);
-          if (target) {
-            target.hp -= hero.damage;
-          }
+          if (target) target.hp -= hero.damage;
         } else if (hero.id === "dunkeld") {
-          // Dunkeld attaque un ennemi adjacent avec de gros dégâts
+          // Dunkeld : attaque un ennemi adjacent avec des dégâts élevés
           let target = findNearestEnemyInRange(hero, hero.range);
-          if (target) {
-            target.hp -= hero.damage;
-          }
+          if (target) target.hp -= hero.damage;
         } else if (hero.id === "barad") {
-          // Barad attaque un ennemi adjacent et active son taunt
+          // Barad : attaque un ennemi adjacent et active le taunt
           let target = findNearestEnemyInRange(hero, hero.range);
           if (target) {
             target.hp -= hero.damage;
             hero.taunt = true;
           }
         } else {
-          // Par défaut, attaque un ennemi adjacent
+          // Action par défaut
           let target = findNearestEnemyInRange(hero, hero.range);
-          if (target) {
-            target.hp -= hero.damage;
-          }
+          if (target) target.hp -= hero.damage;
         }
       } else if (action === "heal") {
-        // L'action "soigner" est prioritaire pour Elunara
+        // Pour Elunara, soin sur l'allié le plus blessé ; sinon auto-soin
         if (hero.id === "elunara") {
           let target = findAllyToHeal(hero);
           if (target) {
             target.hp = Math.min(target.maxHp, target.hp + hero.heal);
           }
         } else {
-          // Pour les autres, on pourrait autoriser un auto-soin (ici +10 HP)
           hero.hp = Math.min(hero.maxHp, hero.hp + 10);
         }
       }
-      
-      // Éliminer les ennemis à 0 HP
+      // Éliminer les ennemis dont les HP sont tombés à 0 ou moins
       enemies = enemies.filter(enemy => enemy.hp > 0);
-      
-      // Fin du tour du héros : passage au héros suivant
-      phase = "move";
-      currentHeroIndex++;
-      if (currentHeroIndex >= heroes.length) {
-        currentHeroIndex = 0;
+      // Marquer le héros comme ayant agi et réinitialiser la sélection
+      hero.acted = true;
+      selectedHeroIndex = null;
+      updateHeroSelection();
+      // Si tous les héros vivants ont agi, passer au tour des ennemis
+      if (heroes.filter(h => h.hp > 0 && !h.acted).length === 0) {
         enemyTurn();
       }
       render();
     }
-    
+
+    // Fonction pour passer le tour pour le héros sélectionné
+    function passTurn() {
+      if (selectedHeroIndex === null) {
+        alert("Veuillez sélectionner un héros pour agir.");
+        return;
+      }
+      let hero = heroes[selectedHeroIndex];
+      logAction(hero.name + " passe son tour.");
+      hero.acted = true;
+      selectedHeroIndex = null;
+      updateHeroSelection();
+      if (heroes.filter(h => h.hp > 0 && !h.acted).length === 0) {
+        enemyTurn();
+      }
+      render();
+    }
+
     // Recherche d'un ennemi dans la portée (distance de Manhattan)
     function findNearestEnemyInRange(hero, range) {
-      let candidates = enemies.filter(enemy => enemy.hp > 0 && 
+      let candidates = enemies.filter(enemy => enemy.hp > 0 &&
         (Math.abs(enemy.x - hero.x) + Math.abs(enemy.y - hero.y)) <= range);
       if (candidates.length === 0) return null;
-      candidates.sort((a, b) => 
-        (Math.abs(a.x - hero.x) + Math.abs(a.y - hero.y)) - 
+      candidates.sort((a, b) =>
+        (Math.abs(a.x - hero.x) + Math.abs(a.y - hero.y)) -
         (Math.abs(b.x - hero.x) + Math.abs(b.y - hero.y))
       );
       return candidates[0];
     }
-    
-    // Pour Elunara : trouver l'allié le plus blessé (parmi ceux avec moins de HP que max)
+
+    // Pour Elunara : trouver l'allié le plus blessé
     function findAllyToHeal(hero) {
       let injured = heroes.filter(h => h.hp > 0 && h.hp < h.maxHp);
       if (injured.length === 0) return null;
       injured.sort((a, b) => a.hp - b.hp);
       return injured[0];
     }
-    
+
     /* --- Tour des ennemis --- */
     function enemyTurn() {
       enemies.forEach(enemy => {
         if (enemy.hp <= 0) return;
-        // Si un ennemi est adjacent à un héros, il attaque
+        // S'il y a un héros adjacent, attaquer
         let adjacentHeroes = heroes.filter(hero => hero.hp > 0 &&
           (Math.abs(hero.x - enemy.x) + Math.abs(hero.y - enemy.y)) === 1);
         if (adjacentHeroes.length > 0) {
-          // S'il y a un Barad avec taunt parmi eux, il sera ciblé
           let target = adjacentHeroes.find(hero => hero.id === "barad" && hero.taunt);
           if (!target) target = adjacentHeroes[0];
-          target.hp -= 10; // dégât fixe de l'ennemi
+          target.hp -= 10;
         } else {
-          // Sinon, l'ennemi se déplace d'une case vers le héros le plus proche
+          // Sinon, déplacer l'ennemi vers le héros le plus proche
           let targetHero = findNearestHero(enemy);
           if (targetHero) {
             let dx = targetHero.x - enemy.x;
             let dy = targetHero.y - enemy.y;
             let stepX = (dx !== 0) ? dx / Math.abs(dx) : 0;
             let stepY = (dy !== 0) ? dy / Math.abs(dy) : 0;
-            // Essayer de se déplacer horizontalement puis verticalement
             if (canMove(enemy.x + stepX, enemy.y)) {
               enemy.x += stepX;
             } else if (canMove(enemy.x, enemy.y + stepY)) {
@@ -408,7 +433,6 @@
       });
       // Réinitialiser le taunt de Barad
       heroes.forEach(hero => { if (hero.id === "barad") hero.taunt = false; });
-      
       // Vérifier si tous les héros sont morts
       if (heroes.every(hero => hero.hp <= 0)) {
         gameOver();
@@ -418,13 +442,13 @@
       if (enemies.length === 0 && !doorActive) {
         activateDoor();
       }
-      
-      // Préparer le prochain tour des héros
-      currentHeroIndex = 0;
-      phase = "move";
+      // Réinitialiser le statut "acted" pour le prochain tour
+      heroes.forEach(hero => { if (hero.hp > 0) hero.acted = false; });
+      selectedHeroIndex = null;
+      updateHeroSelection();
       render();
     }
-    
+
     // Recherche du héros vivant le plus proche d'un ennemi
     function findNearestHero(enemy) {
       let aliveHeroes = heroes.filter(hero => hero.hp > 0);
@@ -435,8 +459,8 @@
       );
       return aliveHeroes[0];
     }
-    
-    // Vérifier qu'une case est libre pour se déplacer (pas de mur ni d'occupation)
+
+    // Vérifier si une case est libre pour se déplacer
     function canMove(x, y) {
       if (x < 0 || x >= gridWidth || y < 0 || y >= gridHeight) return false;
       if (grid[y][x] === '#') return false;
@@ -444,13 +468,13 @@
       let occupiedByHero = heroes.some(hero => hero.hp > 0 && hero.x === x && hero.y === y);
       return !occupiedByEnemy && !occupiedByHero;
     }
-    
+
     /* --- Activation de la porte (fin de niveau) --- */
     function activateDoor() {
       doorActive = true;
       let possibleCells = [];
-      for (let y = 1; y < gridHeight-1; y++){
-        for (let x = 1; x < gridWidth-1; x++){
+      for (let y = 1; y < gridHeight - 1; y++){
+        for (let x = 1; x < gridWidth - 1; x++){
           if (grid[y][x] === '.') {
             let occupied = heroes.some(hero => hero.hp > 0 && hero.x === x && hero.y === y);
             if (!occupied) {
@@ -464,50 +488,48 @@
         doorPosition = {x: cell.x, y: cell.y};
       }
     }
-    
+
     /* --- Passage au niveau suivant --- */
     function completeLevel() {
       score++;
       generateLevel();
       positionHeroes();
-      currentHeroIndex = 0;
-      phase = "move";
       render();
     }
-    
+
     /* --- Fin de partie --- */
     function gameOver() {
-      gameState = "gameOver";
       document.getElementById('game').style.display = "none";
       document.getElementById('gameOver').style.display = "flex";
       document.getElementById('scoreText').innerText = "Vous avez terminé " + score + " donjons.";
     }
-    
+
+    // Fonction de log (ici simplement dans la console)
+    function logAction(message) {
+      console.log(message);
+    }
+
     /* --- Démarrage du jeu --- */
     function startGame() {
       score = 0;
-      // Réinitialiser les HP des héros
-      heroes.forEach(hero => { hero.hp = hero.maxHp; });
+      heroes.forEach(hero => { hero.hp = hero.maxHp; hero.acted = false; });
       generateLevel();
       positionHeroes();
-      currentHeroIndex = 0;
-      phase = "move";
-      gameState = "playing";
+      selectedHeroIndex = null;
       document.getElementById('menu').style.display = "none";
       document.getElementById('gameOver').style.display = "none";
       document.getElementById('game').style.display = "block";
       render();
     }
-    
+
     /* --- Écouteurs d'événements pour les contrôles tactiles --- */
     document.getElementById('upButton').addEventListener('click', () => { handleMove("up"); });
     document.getElementById('downButton').addEventListener('click', () => { handleMove("down"); });
     document.getElementById('leftButton').addEventListener('click', () => { handleMove("left"); });
     document.getElementById('rightButton').addEventListener('click', () => { handleMove("right"); });
-    
     document.getElementById('attackButton').addEventListener('click', () => { handleAction("attack"); });
     document.getElementById('healButton').addEventListener('click', () => { handleAction("heal"); });
-    
+    document.getElementById('passButton').addEventListener('click', () => { passTurn(); });
     document.getElementById('startButton').addEventListener('click', startGame);
     document.getElementById('restartButton').addEventListener('click', () => {
       document.getElementById('gameOver').style.display = "none";
