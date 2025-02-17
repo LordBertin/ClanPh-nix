@@ -140,14 +140,14 @@
     let enemies = [];
     let score = 0;
 
-    // Définition des héros avec leurs caractéristiques, position, couleur, etc.
-    // Chaque héros dispose désormais d'un compteur movesRemaining (3 déplacements par tour).
+    // Définition des héros
+    // Pour Gilmor et Grymyr, on ajoute les propriétés cdDefAvailable et cdDefActive.
     let heroes = [
       { id: 'barad', name: 'Barad', initial: 'B', color: 'red',    hp: 100, maxHp: 100, x: 1, y: 1, range: 1, damage: 20, taunt: false, acted: false, movesRemaining: 3 },
       { id: 'dunkeld', name: 'Dunkeld', initial: 'D', color: 'gold',  hp: 100, maxHp: 100, x: 2, y: 1, range: 1, damage: 30, acted: false, movesRemaining: 3 },
-      { id: 'gilmor', name: 'Gilmor', initial: 'G', color: 'green',  hp: 100, maxHp: 100, x: 1, y: 2, range: 3, damage: 30, acted: false, movesRemaining: 3 },
-      { id: 'grymyr', name: 'Grymyr', initial: 'G', color: 'blue',   hp: 100, maxHp: 100, x: 2, y: 2, range: 3, damage: 25, acted: false, movesRemaining: 3 },
-      { id: 'elunara', name: 'Elunara', initial: 'E', color: 'cyan',   hp: 100, maxHp: 100, x: 3, y: 2, range: 1, heal: 20, acted: false, movesRemaining: 3 }
+      { id: 'gilmor', name: 'Gilmor', initial: 'G', color: 'green',  hp: 100, maxHp: 100, x: 1, y: 2, range: 3, damage: 30, acted: false, movesRemaining: 3, cdDefAvailable: true, cdDefActive: false },
+      { id: 'grymyr', name: 'Grymyr', initial: 'G', color: 'skyblue', hp: 100, maxHp: 100, x: 2, y: 2, range: 3, damage: 25, acted: false, movesRemaining: 3, cdDefAvailable: true, cdDefActive: false },
+      { id: 'elunara', name: 'Elunara', initial: 'E', color: 'white',  hp: 100, maxHp: 100, x: 3, y: 2, range: 1, heal: 20, acted: false, movesRemaining: 3 }
     ];
 
     // Index du héros sélectionné pour agir
@@ -202,6 +202,11 @@
           hero.y = startPositions[i].y;
           hero.acted = false;
           hero.movesRemaining = 3;
+          // Pour Gilmor et Grymyr, on réinitialise la défense CD si le héros est vivant
+          if (hero.id === "gilmor" || hero.id === "grymyr") {
+            hero.cdDefAvailable = true;
+            hero.cdDefActive = false;
+          }
         }
       });
       selectedHeroIndex = null;
@@ -222,10 +227,10 @@
       if (doorActive) {
         displayGrid[doorPosition.y][doorPosition.x] = 'O';
       }
-      // Placer les ennemis (affichés par X en blanc)
+      // Placer les ennemis (affichés par x en rouge)
       enemies.forEach(enemy => {
         if (enemy.hp > 0) {
-          displayGrid[enemy.y][enemy.x] = '<span style="color: white;">X</span>';
+          displayGrid[enemy.y][enemy.x] = '<span style="color: red;">x</span>';
         }
       });
       // Placer les héros (couleur et surlignage si sélectionné)
@@ -245,6 +250,7 @@
       }
       document.getElementById('board').innerHTML = boardHtml;
       updateInfo();
+      updateControls();
     }
 
     // Mise à jour des informations affichées
@@ -253,7 +259,7 @@
       let infoText = "";
       if (selectedHeroIndex !== null) {
         let hero = heroes[selectedHeroIndex];
-        infoText += "Héros sélectionné : " + hero.name + " (HP : " + hero.hp + "/" + hero.maxHp + 
+        infoText += "Héros sélectionné : " + hero.name + " (HP : " + hero.hp + "/" + hero.maxHp +
                     ", Déplacements restants : " + hero.movesRemaining + ")";
       } else {
         infoText += "Sélectionnez un héros pour agir.";
@@ -289,6 +295,50 @@
       });
     }
 
+    // Mise à jour des contrôles selon le héros sélectionné
+    function updateControls() {
+      const attackButton = document.getElementById('attackButton');
+      const hero = (selectedHeroIndex !== null) ? heroes[selectedHeroIndex] : null;
+      if (!hero) {
+        attackButton.disabled = true;
+        attackButton.textContent = "Attaquer";
+        return;
+      }
+      if (hero.id === "elunara") {
+        // Elunara ne peut pas attaquer
+        attackButton.disabled = true;
+        attackButton.textContent = "Attaquer";
+      } else if (hero.id === "gilmor" || hero.id === "grymyr") {
+        // Pour Gilmor et Grymyr, on teste la distance
+        let validTargets = enemies.filter(enemy => enemy.hp > 0 &&
+          (Math.abs(enemy.x - hero.x) + Math.abs(enemy.y - hero.y)) === 3);
+        if (validTargets.length > 0) {
+          attackButton.disabled = false;
+          attackButton.textContent = "Attaquer";
+        } else {
+          // S'il existe un ennemi trop proche (< 3) et que la défense CD est disponible
+          let closeEnemies = enemies.filter(enemy => enemy.hp > 0 &&
+            (Math.abs(enemy.x - hero.x) + Math.abs(enemy.y - hero.y)) < 3);
+          if (closeEnemies.length > 0 && hero.cdDefAvailable) {
+            attackButton.disabled = false;
+            attackButton.textContent = "CD Def";
+          } else {
+            attackButton.disabled = true;
+            attackButton.textContent = "Attaquer";
+          }
+        }
+      } else if (hero.id === "barad" || hero.id === "dunkeld") {
+        // Ces héros attaquent uniquement si un ennemi est adjacent (distance = 1)
+        let validTargets = enemies.filter(enemy => enemy.hp > 0 &&
+          (Math.abs(enemy.x - hero.x) + Math.abs(enemy.y - hero.y)) === 1);
+        attackButton.disabled = (validTargets.length === 0);
+        attackButton.textContent = "Attaquer";
+      } else {
+        attackButton.disabled = false;
+        attackButton.textContent = "Attaquer";
+      }
+    }
+
     /* --- Gestion du déplacement (phase "move") --- */
     function handleMove(direction) {
       if (selectedHeroIndex === null) {
@@ -306,10 +356,10 @@
       else if (direction === "down") newY++;
       else if (direction === "left") newX--;
       else if (direction === "right") newX++;
-      // Vérifier les limites et les murs
+      // Vérifier limites et murs
       if (newX < 0 || newX >= gridWidth || newY < 0 || newY >= gridHeight) return;
       if (grid[newY][newX] === '#') return;
-      // Éviter de se déplacer sur une case occupée par un autre héros vivant
+      // Empêcher de se déplacer sur une case occupée par un autre héros vivant
       if (heroes.some((h, i) => h.hp > 0 && i !== selectedHeroIndex && h.x === newX && h.y === newY)) return;
       // Appliquer le déplacement et décrémenter le compteur
       hero.x = newX;
@@ -332,46 +382,58 @@
       let hero = heroes[selectedHeroIndex];
       if (hero.hp <= 0) return;
       if (action === "attack") {
-        if (hero.id === "barad" || hero.id === "dunkeld") {
-          // Barad et Dunkeld n'attaquent que si un ennemi est adjacent (distance = 1)
+        if (hero.id === "elunara") {
+          alert("Elunara ne peut pas attaquer. Utilisez Soigner.");
+          return;
+        } else if (hero.id === "gilmor" || hero.id === "grymyr") {
+          // Pour Gilmor et Grymyr, attaquer si un ennemi est exactement à distance 3
+          let validTargets = enemies.filter(enemy => enemy.hp > 0 &&
+            (Math.abs(enemy.x - hero.x) + Math.abs(enemy.y - hero.y)) === 3);
+          if (validTargets.length > 0) {
+            if (hero.id === "gilmor") {
+              validTargets[0].hp -= hero.damage;
+            } else if (hero.id === "grymyr") {
+              validTargets.forEach(enemy => enemy.hp -= hero.damage);
+            }
+          } else {
+            // Si un ennemi est trop proche (< 3) et que CD Def est disponible, activer la défense
+            let closeEnemies = enemies.filter(enemy => enemy.hp > 0 &&
+              (Math.abs(enemy.x - hero.x) + Math.abs(enemy.y - hero.y)) < 3);
+            if (closeEnemies.length > 0 && hero.cdDefAvailable) {
+              hero.cdDefActive = true;
+              hero.cdDefAvailable = false;
+              logAction(hero.name + " active CD Def : prochaine attaque ennemie bloquée.");
+            } else {
+              alert("Aucune cible valide ou CD Def déjà utilisé.");
+              return;
+            }
+          }
+        } else if (hero.id === "barad" || hero.id === "dunkeld") {
+          // Barad et Dunkeld attaquent un ennemi adjacent (distance = 1)
           let candidates = enemies.filter(enemy => enemy.hp > 0 &&
-                          (Math.abs(enemy.x - hero.x) + Math.abs(enemy.y - hero.y)) === 1);
+            (Math.abs(enemy.x - hero.x) + Math.abs(enemy.y - hero.y)) === 1);
           if (candidates.length > 0) {
             candidates[0].hp -= hero.damage;
             if (hero.id === "barad") hero.taunt = true;
           }
-        } else if (hero.id === "gilmor") {
-          // Gilmor attaque un ennemi exactement à 3 cases (deux cases vides entre eux)
-          let candidates = enemies.filter(enemy => enemy.hp > 0 &&
-                          (Math.abs(enemy.x - hero.x) + Math.abs(enemy.y - hero.y)) === 3);
-          if (candidates.length > 0) {
-            candidates[0].hp -= hero.damage;
-          }
-        } else if (hero.id === "grymyr") {
-          // Grymyr attaque tous les ennemis situés exactement à 3 cases
-          enemies.forEach(enemy => {
-            if (enemy.hp > 0 && (Math.abs(enemy.x - hero.x) + Math.abs(enemy.y - hero.y)) === 3) {
-              enemy.hp -= hero.damage;
-            }
-          });
         }
       } else if (action === "heal") {
+        // Pour Elunara, soigner l'allié le plus blessé (ou lui-même)
         if (hero.id === "elunara") {
           let target = findAllyToHeal(hero);
           if (target) {
             target.hp = Math.min(target.maxHp, target.hp + hero.heal);
           }
         } else {
+          // Pour les autres, un auto-soin de 10 HP
           hero.hp = Math.min(hero.maxHp, hero.hp + 10);
         }
       }
       // Éliminer les ennemis dont les HP sont ≤ 0
       enemies = enemies.filter(enemy => enemy.hp > 0);
-      // Marquer le héros comme ayant agi et réinitialiser la sélection
       hero.acted = true;
       selectedHeroIndex = null;
       updateHeroSelection();
-      // Si tous les héros vivants ont agi, passer au tour des ennemis
       if (heroes.filter(h => h.hp > 0 && !h.acted).length === 0) {
         enemyTurn();
       }
@@ -395,7 +457,7 @@
       render();
     }
 
-    // Recherche d'un ennemi dans la portée (pour les héros, non utilisé pour Gilmor/Grymyr dans leur condition spéciale)
+    // Recherche d'un ennemi dans la portée (pour d'autres héros)
     function findNearestEnemyInRange(hero, range) {
       let candidates = enemies.filter(enemy => enemy.hp > 0 &&
         (Math.abs(enemy.x - hero.x) + Math.abs(enemy.y - hero.y)) <= range);
@@ -410,7 +472,7 @@
     // Pour Elunara : trouver l'allié le plus blessé
     function findAllyToHeal(hero) {
       let injured = heroes.filter(h => h.hp > 0 && h.hp < h.maxHp);
-      if (injured.length === 0) return null;
+      if (injured.length === 0) return hero; // soigner soi-même en dernier recours
       injured.sort((a, b) => a.hp - b.hp);
       return injured[0];
     }
@@ -419,9 +481,9 @@
     function enemyTurn() {
       enemies.forEach(enemy => {
         if (enemy.hp <= 0) return;
-        // Chaque ennemi peut se déplacer jusqu'à 3 fois avant d'attaquer
+        // Chaque ennemi peut se déplacer jusqu'à 3 fois s'il n'est pas adjacent à un héros
         for (let m = 0; m < 3; m++) {
-          if (isAdjacent(enemy)) break; // s'il est adjacent à un héros, ne pas bouger davantage
+          if (isAdjacent(enemy)) break;
           let targetHero = findNearestHero(enemy);
           if (targetHero) {
             let dx = targetHero.x - enemy.x;
@@ -437,17 +499,24 @@
             }
           }
         }
-        // Après déplacement, si l'ennemi est adjacent à un héros, il attaque et inflige 25 points de dégâts
+        // Après déplacement, s'il est adjacent à un héros, attaquer
         let adjacentHeroes = heroes.filter(hero => hero.hp > 0 &&
           (Math.abs(hero.x - enemy.x) + Math.abs(hero.y - enemy.y)) === 1);
         if (adjacentHeroes.length > 0) {
-          let target = adjacentHeroes.find(hero => hero.id === "barad" && hero.taunt) || adjacentHeroes[0];
-          target.hp -= 25;
+          // Si un héros adjacent a activé CD Def, bloquer cette attaque
+          let defHero = adjacentHeroes.find(hero => hero.cdDefActive);
+          if (defHero) {
+            logAction("L'attaque ennemie contre " + defHero.name + " a été bloquée par CD Def.");
+            defHero.cdDefActive = false;
+          } else {
+            let target = adjacentHeroes.find(hero => hero.id === "barad" && hero.taunt) || adjacentHeroes[0];
+            target.hp -= 25;
+          }
         }
       });
       // Réinitialiser le taunt de Barad
       heroes.forEach(hero => { if (hero.id === "barad") hero.taunt = false; });
-      // Vérifier si tous les héros sont morts
+      // Si tous les héros sont morts, terminer la partie
       if (heroes.every(hero => hero.hp <= 0)) {
         gameOver();
         return;
@@ -489,7 +558,7 @@
       return !occupiedByEnemy && !occupiedByHero;
     }
 
-    // Vérifier si une case est libre pour qu'un ennemi se déplace (on ne tient pas compte des héros ici)
+    // Vérifier si une case est libre pour qu'un ennemi se déplace
     function canMoveForEnemy(x, y) {
       if (x < 0 || x >= gridWidth || y < 0 || y >= gridHeight) return false;
       if (grid[y][x] === '#') return false;
@@ -532,7 +601,7 @@
       document.getElementById('scoreText').innerText = "Vous avez terminé " + score + " donjons.";
     }
 
-    // Fonction de log (pour l'instant dans la console)
+    // Fonction de log (ici dans la console)
     function logAction(message) {
       console.log(message);
     }
@@ -540,7 +609,15 @@
     /* --- Démarrage du jeu --- */
     function startGame() {
       score = 0;
-      heroes.forEach(hero => { hero.hp = hero.maxHp; hero.acted = false; hero.movesRemaining = 3; });
+      heroes.forEach(hero => {
+        hero.hp = hero.maxHp;
+        hero.acted = false;
+        hero.movesRemaining = 3;
+        if (hero.id === "gilmor" || hero.id === "grymyr") {
+          hero.cdDefAvailable = true;
+          hero.cdDefActive = false;
+        }
+      });
       generateLevel();
       positionHeroes();
       selectedHeroIndex = null;
