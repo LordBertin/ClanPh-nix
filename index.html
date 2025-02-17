@@ -16,12 +16,16 @@
     /* Écran d'accueil et écran de fin */
     #menu, #gameOver {
       position: absolute;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #000;
       display: flex;
       flex-direction: column;
       justify-content: center;
       align-items: center;
+      z-index: 2;
     }
     #menu h1, #gameOver h1 {
       font-size: 3em;
@@ -33,11 +37,14 @@
       margin: 0.3em;
       border: none;
       border-radius: 5px;
+      cursor: pointer;
     }
     /* Zone de jeu */
     #game {
       display: none;
       padding: 0.5em;
+      position: relative;
+      z-index: 1;
     }
     #board {
       background: #000;
@@ -117,7 +124,7 @@
   </div>
 
   <!-- Écran de fin de partie -->
-  <div id="gameOver">
+  <div id="gameOver" style="display:none;">
     <h1>Game Over</h1>
     <p id="scoreText"></p>
     <button id="restartButton">Recommencer</button>
@@ -133,16 +140,17 @@
     let enemies = [];
     let score = 0;
 
-    // Définition des héros (leurs caractéristiques, initiale, couleur, position de départ)
+    // Définition des héros avec leurs caractéristiques, position, couleur, etc.
+    // Chaque héros dispose désormais d'un compteur movesRemaining (3 déplacements par tour).
     let heroes = [
-      { id: 'barad', name: 'Barad', initial: 'B', color: 'red',    hp: 100, maxHp: 100, x: 1, y: 1, range: 1, damage: 20, taunt: false, acted: false },
-      { id: 'dunkeld', name: 'Dunkeld', initial: 'D', color: 'gold',  hp: 100, maxHp: 100, x: 2, y: 1, range: 1, damage: 30, acted: false },
-      { id: 'gilmor', name: 'Gilmor', initial: 'G', color: 'green',  hp: 100, maxHp: 100, x: 1, y: 2, range: 3, damage: 30, acted: false },
-      { id: 'grymyr', name: 'Grymyr', initial: 'G', color: 'blue',   hp: 100, maxHp: 100, x: 2, y: 2, range: 1, damage: 25, acted: false },
-      { id: 'elunara', name: 'Elunara', initial: 'E', color: 'cyan',   hp: 100, maxHp: 100, x: 3, y: 2, range: 1, heal: 20, acted: false }
+      { id: 'barad', name: 'Barad', initial: 'B', color: 'red',    hp: 100, maxHp: 100, x: 1, y: 1, range: 1, damage: 20, taunt: false, acted: false, movesRemaining: 3 },
+      { id: 'dunkeld', name: 'Dunkeld', initial: 'D', color: 'gold',  hp: 100, maxHp: 100, x: 2, y: 1, range: 1, damage: 30, acted: false, movesRemaining: 3 },
+      { id: 'gilmor', name: 'Gilmor', initial: 'G', color: 'green',  hp: 100, maxHp: 100, x: 1, y: 2, range: 3, damage: 30, acted: false, movesRemaining: 3 },
+      { id: 'grymyr', name: 'Grymyr', initial: 'G', color: 'blue',   hp: 100, maxHp: 100, x: 2, y: 2, range: 3, damage: 25, acted: false, movesRemaining: 3 },
+      { id: 'elunara', name: 'Elunara', initial: 'E', color: 'cyan',   hp: 100, maxHp: 100, x: 3, y: 2, range: 1, heal: 20, acted: false, movesRemaining: 3 }
     ];
 
-    // Variable pour le héros sélectionné (index dans le tableau heroes)
+    // Index du héros sélectionné pour agir
     let selectedHeroIndex = null;
 
     /* --- Génération du niveau --- */
@@ -167,7 +175,7 @@
       doorActive = false;
       doorPosition = {x: -1, y: -1};
 
-      // Placer quelques ennemis (par exemple 5 par niveau)
+      // Placer quelques ennemis (ici 5 par niveau)
       enemies = [];
       for (let i = 0; i < 5; i++){
         let ex, ey;
@@ -179,7 +187,7 @@
       }
     }
 
-    // Positionner les héros dans la zone de départ et réinitialiser leur statut d'action
+    // Positionner les héros dans la zone de départ et réinitialiser leur statut et déplacements
     function positionHeroes() {
       const startPositions = [
         {x: 1, y: 1},
@@ -193,6 +201,7 @@
           hero.x = startPositions[i].x;
           hero.y = startPositions[i].y;
           hero.acted = false;
+          hero.movesRemaining = 3;
         }
       });
       selectedHeroIndex = null;
@@ -219,7 +228,7 @@
           displayGrid[enemy.y][enemy.x] = '<span style="color: white;">X</span>';
         }
       });
-      // Placer les héros (la couleur et le surlignage pour le héros sélectionné)
+      // Placer les héros (couleur et surlignage si sélectionné)
       heroes.forEach((hero, index) => {
         if (hero.hp > 0) {
           let highlight = (index === selectedHeroIndex) ? 'background: rgba(255,255,255,0.3);' : '';
@@ -244,7 +253,8 @@
       let infoText = "";
       if (selectedHeroIndex !== null) {
         let hero = heroes[selectedHeroIndex];
-        infoText += "Héros sélectionné : " + hero.name + " (HP : " + hero.hp + "/" + hero.maxHp + ")";
+        infoText += "Héros sélectionné : " + hero.name + " (HP : " + hero.hp + "/" + hero.maxHp + 
+                    ", Déplacements restants : " + hero.movesRemaining + ")";
       } else {
         infoText += "Sélectionnez un héros pour agir.";
       }
@@ -257,7 +267,7 @@
       const container = document.getElementById('heroSelection');
       container.innerHTML = "";
       heroes.forEach((hero, index) => {
-        if (hero.hp <= 0) return; // Ne pas afficher les héros morts
+        if (hero.hp <= 0) return; // ne pas afficher les héros morts
         let heroDiv = document.createElement('span');
         heroDiv.classList.add('hero-option');
         heroDiv.style.color = hero.color;
@@ -286,19 +296,25 @@
         return;
       }
       let hero = heroes[selectedHeroIndex];
+      if (hero.movesRemaining <= 0) {
+        alert("Ce héros a déjà effectué ses 3 déplacements pour ce tour.");
+        return;
+      }
       let newX = hero.x;
       let newY = hero.y;
       if (direction === "up") newY--;
       else if (direction === "down") newY++;
       else if (direction === "left") newX--;
       else if (direction === "right") newX++;
-      // Vérifier limites et murs
+      // Vérifier les limites et les murs
       if (newX < 0 || newX >= gridWidth || newY < 0 || newY >= gridHeight) return;
       if (grid[newY][newX] === '#') return;
-      // Empêcher le déplacement sur une case occupée par un autre héros vivant
+      // Éviter de se déplacer sur une case occupée par un autre héros vivant
       if (heroes.some((h, i) => h.hp > 0 && i !== selectedHeroIndex && h.x === newX && h.y === newY)) return;
+      // Appliquer le déplacement et décrémenter le compteur
       hero.x = newX;
       hero.y = newY;
+      hero.movesRemaining--;
       // Si la porte est active et que le héros l'atteint, terminer le niveau
       if (doorActive && newX === doorPosition.x && newY === doorPosition.y) {
         completeLevel();
@@ -316,35 +332,30 @@
       let hero = heroes[selectedHeroIndex];
       if (hero.hp <= 0) return;
       if (action === "attack") {
-        if (hero.id === "grymyr") {
-          // Grymyr : lance un éclair sur tous les ennemis adjacents
+        if (hero.id === "barad" || hero.id === "dunkeld") {
+          // Barad et Dunkeld n'attaquent que si un ennemi est adjacent (distance = 1)
+          let candidates = enemies.filter(enemy => enemy.hp > 0 &&
+                          (Math.abs(enemy.x - hero.x) + Math.abs(enemy.y - hero.y)) === 1);
+          if (candidates.length > 0) {
+            candidates[0].hp -= hero.damage;
+            if (hero.id === "barad") hero.taunt = true;
+          }
+        } else if (hero.id === "gilmor") {
+          // Gilmor attaque un ennemi exactement à 3 cases (deux cases vides entre eux)
+          let candidates = enemies.filter(enemy => enemy.hp > 0 &&
+                          (Math.abs(enemy.x - hero.x) + Math.abs(enemy.y - hero.y)) === 3);
+          if (candidates.length > 0) {
+            candidates[0].hp -= hero.damage;
+          }
+        } else if (hero.id === "grymyr") {
+          // Grymyr attaque tous les ennemis situés exactement à 3 cases
           enemies.forEach(enemy => {
-            if (enemy.hp > 0 && (Math.abs(enemy.x - hero.x) + Math.abs(enemy.y - hero.y)) === 1) {
+            if (enemy.hp > 0 && (Math.abs(enemy.x - hero.x) + Math.abs(enemy.y - hero.y)) === 3) {
               enemy.hp -= hero.damage;
             }
           });
-        } else if (hero.id === "gilmor") {
-          // Gilmor : attaque à distance (portée 3)
-          let target = findNearestEnemyInRange(hero, hero.range);
-          if (target) target.hp -= hero.damage;
-        } else if (hero.id === "dunkeld") {
-          // Dunkeld : attaque un ennemi adjacent avec des dégâts élevés
-          let target = findNearestEnemyInRange(hero, hero.range);
-          if (target) target.hp -= hero.damage;
-        } else if (hero.id === "barad") {
-          // Barad : attaque un ennemi adjacent et active le taunt
-          let target = findNearestEnemyInRange(hero, hero.range);
-          if (target) {
-            target.hp -= hero.damage;
-            hero.taunt = true;
-          }
-        } else {
-          // Action par défaut
-          let target = findNearestEnemyInRange(hero, hero.range);
-          if (target) target.hp -= hero.damage;
         }
       } else if (action === "heal") {
-        // Pour Elunara, soin sur l'allié le plus blessé ; sinon auto-soin
         if (hero.id === "elunara") {
           let target = findAllyToHeal(hero);
           if (target) {
@@ -354,7 +365,7 @@
           hero.hp = Math.min(hero.maxHp, hero.hp + 10);
         }
       }
-      // Éliminer les ennemis dont les HP sont tombés à 0 ou moins
+      // Éliminer les ennemis dont les HP sont ≤ 0
       enemies = enemies.filter(enemy => enemy.hp > 0);
       // Marquer le héros comme ayant agi et réinitialiser la sélection
       hero.acted = true;
@@ -367,7 +378,7 @@
       render();
     }
 
-    // Fonction pour passer le tour pour le héros sélectionné
+    // Permet de passer le tour pour le héros sélectionné
     function passTurn() {
       if (selectedHeroIndex === null) {
         alert("Veuillez sélectionner un héros pour agir.");
@@ -384,7 +395,7 @@
       render();
     }
 
-    // Recherche d'un ennemi dans la portée (distance de Manhattan)
+    // Recherche d'un ennemi dans la portée (pour les héros, non utilisé pour Gilmor/Grymyr dans leur condition spéciale)
     function findNearestEnemyInRange(hero, range) {
       let candidates = enemies.filter(enemy => enemy.hp > 0 &&
         (Math.abs(enemy.x - hero.x) + Math.abs(enemy.y - hero.y)) <= range);
@@ -408,27 +419,30 @@
     function enemyTurn() {
       enemies.forEach(enemy => {
         if (enemy.hp <= 0) return;
-        // S'il y a un héros adjacent, attaquer
-        let adjacentHeroes = heroes.filter(hero => hero.hp > 0 &&
-          (Math.abs(hero.x - enemy.x) + Math.abs(hero.y - enemy.y)) === 1);
-        if (adjacentHeroes.length > 0) {
-          let target = adjacentHeroes.find(hero => hero.id === "barad" && hero.taunt);
-          if (!target) target = adjacentHeroes[0];
-          target.hp -= 10;
-        } else {
-          // Sinon, déplacer l'ennemi vers le héros le plus proche
+        // Chaque ennemi peut se déplacer jusqu'à 3 fois avant d'attaquer
+        for (let m = 0; m < 3; m++) {
+          if (isAdjacent(enemy)) break; // s'il est adjacent à un héros, ne pas bouger davantage
           let targetHero = findNearestHero(enemy);
           if (targetHero) {
             let dx = targetHero.x - enemy.x;
             let dy = targetHero.y - enemy.y;
             let stepX = (dx !== 0) ? dx / Math.abs(dx) : 0;
             let stepY = (dy !== 0) ? dy / Math.abs(dy) : 0;
-            if (canMove(enemy.x + stepX, enemy.y)) {
+            if (canMoveForEnemy(enemy.x + stepX, enemy.y)) {
               enemy.x += stepX;
-            } else if (canMove(enemy.x, enemy.y + stepY)) {
+            } else if (canMoveForEnemy(enemy.x, enemy.y + stepY)) {
               enemy.y += stepY;
+            } else {
+              break;
             }
           }
+        }
+        // Après déplacement, si l'ennemi est adjacent à un héros, il attaque et inflige 25 points de dégâts
+        let adjacentHeroes = heroes.filter(hero => hero.hp > 0 &&
+          (Math.abs(hero.x - enemy.x) + Math.abs(hero.y - enemy.y)) === 1);
+        if (adjacentHeroes.length > 0) {
+          let target = adjacentHeroes.find(hero => hero.id === "barad" && hero.taunt) || adjacentHeroes[0];
+          target.hp -= 25;
         }
       });
       // Réinitialiser le taunt de Barad
@@ -439,14 +453,20 @@
         return;
       }
       // Si tous les ennemis sont éliminés, activer la porte
-      if (enemies.length === 0 && !doorActive) {
-        activateDoor();
+      if (enemies.length === 0 || enemies.every(enemy => enemy.hp <= 0)) {
+        if (!doorActive) activateDoor();
       }
-      // Réinitialiser le statut "acted" pour le prochain tour
-      heroes.forEach(hero => { if (hero.hp > 0) hero.acted = false; });
+      // Réinitialiser le statut des héros pour le prochain tour (ils retrouvent 3 déplacements)
+      heroes.forEach(hero => { if (hero.hp > 0) { hero.acted = false; hero.movesRemaining = 3; } });
       selectedHeroIndex = null;
       updateHeroSelection();
       render();
+    }
+
+    // Vérifier si un ennemi est adjacent à un héros (distance = 1)
+    function isAdjacent(enemy) {
+      return heroes.some(hero => hero.hp > 0 &&
+        (Math.abs(hero.x - enemy.x) + Math.abs(hero.y - enemy.y)) === 1);
     }
 
     // Recherche du héros vivant le plus proche d'un ennemi
@@ -460,13 +480,21 @@
       return aliveHeroes[0];
     }
 
-    // Vérifier si une case est libre pour se déplacer
+    // Vérifier si une case est libre pour qu'un héros se déplace
     function canMove(x, y) {
       if (x < 0 || x >= gridWidth || y < 0 || y >= gridHeight) return false;
       if (grid[y][x] === '#') return false;
       let occupiedByEnemy = enemies.some(enemy => enemy.hp > 0 && enemy.x === x && enemy.y === y);
       let occupiedByHero = heroes.some(hero => hero.hp > 0 && hero.x === x && hero.y === y);
       return !occupiedByEnemy && !occupiedByHero;
+    }
+
+    // Vérifier si une case est libre pour qu'un ennemi se déplace (on ne tient pas compte des héros ici)
+    function canMoveForEnemy(x, y) {
+      if (x < 0 || x >= gridWidth || y < 0 || y >= gridHeight) return false;
+      if (grid[y][x] === '#') return false;
+      let occupiedByEnemy = enemies.some(enemy => enemy.hp > 0 && enemy.x === x && enemy.y === y);
+      return !occupiedByEnemy;
     }
 
     /* --- Activation de la porte (fin de niveau) --- */
@@ -504,7 +532,7 @@
       document.getElementById('scoreText').innerText = "Vous avez terminé " + score + " donjons.";
     }
 
-    // Fonction de log (ici simplement dans la console)
+    // Fonction de log (pour l'instant dans la console)
     function logAction(message) {
       console.log(message);
     }
@@ -512,7 +540,7 @@
     /* --- Démarrage du jeu --- */
     function startGame() {
       score = 0;
-      heroes.forEach(hero => { hero.hp = hero.maxHp; hero.acted = false; });
+      heroes.forEach(hero => { hero.hp = hero.maxHp; hero.acted = false; hero.movesRemaining = 3; });
       generateLevel();
       positionHeroes();
       selectedHeroIndex = null;
