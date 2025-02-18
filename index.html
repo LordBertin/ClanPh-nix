@@ -208,25 +208,24 @@
     /* --- Variables globales et paramètres --- */
     const gridWidth = 30;
     const gridHeight = 15;
-    let grid = [];  // grille du niveau
+    let grid = []; // grille du niveau
     let doorActive = false;
-    let doorPosition = {x: -1, y: -1};
+    let doorPosition = { x: -1, y: -1 };
     let enemies = [];
     let score = 0;
-    let boss = null; // Boss, null s'il n'est pas apparu
+    let boss = null; // Le boss, s'il est présent
 
-    // Paramètres de progression (pour augmenter les stats après chaque boss vaincu)
+    // Paramètres de progression (augmentations après chaque boss vaincu)
     let baseEnemyHP = 100;
     let baseEnemyDamageBarad = 15;
     let baseEnemyDamageDunkeld = 20;
-    let baseEnemyDamageOthers = 25; // pour Gilmor et Grymyr
+    let baseEnemyDamageOthers = 25;
     let baseEnemyDamageDefault = 10;
     let baseBossDamage = 30;
 
-    // Définition des héros
-    // Les personnages hormis Elimon ne peuvent plus se soigner.
-    // Positions de départ (modifiées) : 
+    // Définition des héros (positions de départ modifiées)
     // Barad (index 0) : {3,2}, Dunkeld (index 1) : {2,2}, Gilmor (index 2) : {1,2}, Grymyr (index 3) : {2,1}, Elimon (index 4) : {1,1}
+    // Seuls Elimon peut soigner.
     let heroes = [
       { id: 'barad', name: 'Barad', initial: 'B', color: 'red',    hp: 150, maxHp: 150, x: 0, y: 0, range: 1, damage: 25, taunt: false, acted: false, movesRemaining: 3 },
       { id: 'dunkeld', name: 'Dunkeld', initial: 'D', color: 'gold',  hp: 100, maxHp: 100, x: 0, y: 0, range: 1, damage: 75, acted: false, movesRemaining: 3 },
@@ -238,12 +237,17 @@
     // Index du héros sélectionné
     let selectedHeroIndex = null;
 
+    // Fonction utilitaire pour calculer la distance de Manhattan
+    function getDistance(a, b) {
+      return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+    }
+
     /* --- Génération du niveau --- */
     function generateLevel() {
       grid = [];
-      for (let y = 0; y < gridHeight; y++){
+      for (let y = 0; y < gridHeight; y++) {
         grid[y] = [];
-        for (let x = 0; x < gridWidth; x++){
+        for (let x = 0; x < gridWidth; x++) {
           if (y === 0 || y === gridHeight - 1 || x === 0 || x === gridWidth - 1) {
             grid[y][x] = '#';
           } else {
@@ -252,35 +256,35 @@
         }
       }
       // Nettoyer la zone de départ
-      for (let y = 1; y < 4; y++){
-        for (let x = 1; x < 6; x++){
+      for (let y = 1; y < 4; y++) {
+        for (let x = 1; x < 6; x++) {
           grid[y][x] = '.';
         }
       }
       doorActive = false;
-      doorPosition = {x: -1, y: -1};
-      boss = null; // réinitialiser le boss
+      doorPosition = { x: -1, y: -1 };
+      boss = null; // Réinitialiser le boss
 
-      // Création des ennemis
+      // Création des ennemis réguliers
       enemies = [];
-      for (let i = 0; i < 5; i++){
+      for (let i = 0; i < 5; i++) {
         let ex, ey;
         do {
           ex = Math.floor(Math.random() * gridWidth);
           ey = Math.floor(Math.random() * gridHeight);
         } while (grid[ey][ex] !== '.' || (ex < 6 && ey < 6));
-        enemies.push({x: ex, y: ey, hp: Math.round(baseEnemyHP)});
+        enemies.push({ x: ex, y: ey, hp: Math.round(baseEnemyHP) });
       }
     }
 
-    // Positionnement des héros (avec positions modifiées)
+    // Positionnement des héros (Barad et Elimon échangent leurs positions, de même Grymyr et Dunkeld)
     function positionHeroes() {
       const startPositions = [
-        {x: 3, y: 2}, // Barad
-        {x: 2, y: 2}, // Dunkeld (échangé avec Grymyr)
-        {x: 1, y: 2}, // Gilmor
-        {x: 2, y: 1}, // Grymyr (échangé avec Dunkeld)
-        {x: 1, y: 1}  // Elimon
+        { x: 3, y: 2 }, // Barad
+        { x: 2, y: 2 }, // Dunkeld
+        { x: 1, y: 2 }, // Gilmor
+        { x: 2, y: 1 }, // Grymyr
+        { x: 1, y: 1 }  // Elimon
       ];
       heroes.forEach((hero, i) => {
         if (hero.hp > 0) {
@@ -301,25 +305,25 @@
     /* --- Rendu du plateau --- */
     function render() {
       let displayGrid = [];
-      for (let y = 0; y < gridHeight; y++){
+      for (let y = 0; y < gridHeight; y++) {
         displayGrid[y] = [];
-        for (let x = 0; x < gridWidth; x++){
+        for (let x = 0; x < gridWidth; x++) {
           displayGrid[y][x] = grid[y][x];
         }
       }
       if (doorActive) {
         displayGrid[doorPosition.y][doorPosition.x] = 'O';
       }
-      // Affichage des ennemis
+      // Affichage des ennemis réguliers
       enemies.forEach(enemy => {
         if (enemy.hp > 0) {
           let color = (enemy.hp <= Math.round(baseEnemyHP / 2)) ? "lightcoral" : "red";
           displayGrid[enemy.y][enemy.x] = `<span style="color: ${color};">x</span>`;
         }
       });
-      // Affichage du boss s'il existe
+      // Affichage du boss, s'il existe, avec un symbole "☠"
       if (boss && boss.hp > 0) {
-        displayGrid[boss.y][boss.x] = `<span style="color: purple;">B</span>`;
+        displayGrid[boss.y][boss.x] = `<span style="color: purple;">☠</span>`;
       }
       // Affichage des héros
       heroes.forEach((hero, index) => {
@@ -329,8 +333,8 @@
         }
       });
       let boardHtml = "";
-      for (let y = 0; y < gridHeight; y++){
-        for (let x = 0; x < gridWidth; x++){
+      for (let y = 0; y < gridHeight; y++) {
+        for (let x = 0; x < gridWidth; x++) {
           boardHtml += displayGrid[y][x];
         }
         boardHtml += "\n";
@@ -392,7 +396,7 @@
         healButton.disabled = true;
         return;
       }
-      // Pour l'attaque, définir le libellé en fonction du héros
+      // Définir le libellé du bouton d'attaque selon le héros
       if (hero.id === "barad") {
         attackButton.textContent = "Coup de Bouclier";
       } else if (hero.id === "dunkeld") {
@@ -408,22 +412,30 @@
       } else {
         healButton.disabled = true;
       }
-      // Définir la disponibilité du bouton d'attaque selon le héros et sa cible
+      // Vérifier la portée des attaques pour les différents héros, en incluant le boss s'il existe
       if (hero.id === "elimon") {
         attackButton.disabled = true;
       } else if (hero.id === "barad" || hero.id === "dunkeld") {
-        const validTargets = enemies.filter(enemy => enemy.hp > 0 &&
-          (Math.abs(enemy.x - hero.x) + Math.abs(enemy.y - hero.y)) === 1);
-        attackButton.disabled = (validTargets.length === 0);
+        // Doivent être adjacents (distance 1)
+        let candidates = enemies.filter(enemy => enemy.hp > 0 && getDistance(enemy, hero) === 1);
+        if (boss && boss.hp > 0 && getDistance(boss, hero) === 1) {
+          candidates.push(boss);
+        }
+        attackButton.disabled = (candidates.length === 0);
       } else if (hero.id === "gilmor") {
-        const validTargets = enemies.filter(enemy => enemy.hp > 0 &&
-          (Math.abs(enemy.x - hero.x) + Math.abs(enemy.y - hero.y)) === 4);
-        if (validTargets.length > 0) {
+        // Doit être à distance 4 pour attaquer (3 cases vides)
+        let candidates = enemies.filter(enemy => enemy.hp > 0 && getDistance(enemy, hero) === 4);
+        if (boss && boss.hp > 0 && getDistance(boss, hero) === 4) {
+          candidates.push(boss);
+        }
+        if (candidates.length > 0) {
           attackButton.disabled = false;
         } else {
-          const closeEnemies = enemies.filter(enemy => enemy.hp > 0 &&
-            (Math.abs(enemy.x - hero.x) + Math.abs(enemy.y - hero.y)) < 4);
-          if (closeEnemies.length > 0 && hero.cdDefAvailable) {
+          let close = enemies.filter(enemy => enemy.hp > 0 && getDistance(enemy, hero) < 4);
+          if (boss && boss.hp > 0 && getDistance(boss, hero) < 4) {
+            close.push(boss);
+          }
+          if (close.length > 0 && hero.cdDefAvailable) {
             attackButton.disabled = false;
             attackButton.textContent = "CD Def";
           } else {
@@ -431,14 +443,19 @@
           }
         }
       } else if (hero.id === "grymyr") {
-        const validTargets = enemies.filter(enemy => enemy.hp > 0 &&
-          (Math.abs(enemy.x - hero.x) + Math.abs(enemy.y - hero.y)) === 3);
-        if (validTargets.length > 0) {
+        // Doit être à distance 3 pour attaquer (2 cases vides)
+        let candidates = enemies.filter(enemy => enemy.hp > 0 && getDistance(enemy, hero) === 3);
+        if (boss && boss.hp > 0 && getDistance(boss, hero) === 3) {
+          candidates.push(boss);
+        }
+        if (candidates.length > 0) {
           attackButton.disabled = false;
         } else {
-          const closeEnemies = enemies.filter(enemy => enemy.hp > 0 &&
-            (Math.abs(enemy.x - hero.x) + Math.abs(enemy.y - hero.y)) < 3);
-          if (closeEnemies.length > 0 && hero.cdDefAvailable) {
+          let close = enemies.filter(enemy => enemy.hp > 0 && getDistance(enemy, hero) < 3);
+          if (boss && boss.hp > 0 && getDistance(boss, hero) < 3) {
+            close.push(boss);
+          }
+          if (close.length > 0 && hero.cdDefAvailable) {
             attackButton.disabled = false;
             attackButton.textContent = "CD Def";
           } else {
@@ -455,12 +472,12 @@
         return;
       }
       const hero = heroes[selectedHeroIndex];
-      if (enemies.length > 0 && hero.movesRemaining <= 0) {
+      if (enemies.length > 0 && !boss && hero.movesRemaining <= 0) {
         alert("Ce héros a déjà effectué ses 3 déplacements pour ce tour.");
         return;
       }
-      let newX = hero.x;
-      let newY = hero.y;
+      // Si un boss est présent, les déplacements sont illimités pour atteindre la porte.
+      let newX = hero.x, newY = hero.y;
       if (direction === "up") newY--;
       else if (direction === "down") newY++;
       else if (direction === "left") newX--;
@@ -470,7 +487,7 @@
       if (heroes.some((h, i) => h.hp > 0 && i !== selectedHeroIndex && h.x === newX && h.y === newY)) return;
       hero.x = newX;
       hero.y = newY;
-      if (enemies.length > 0) {
+      if (!boss && enemies.length > 0) {
         hero.movesRemaining--;
       }
       if (doorActive && newX === doorPosition.x && newY === doorPosition.y) {
@@ -492,27 +509,43 @@
         if (hero.id === "elimon") {
           alert("Elimon ne peut pas attaquer. Utilisez Soigner.");
           return;
-        } else if (hero.id === "barad" || hero.id === "dunkeld") {
-          const candidates = enemies.filter(enemy => enemy.hp > 0 &&
-            (Math.abs(enemy.x - hero.x) + Math.abs(enemy.y - hero.y)) === 1);
-          if (candidates.length > 0) {
-            candidates[0].hp = 0;
-            animateAttack();
-            if (hero.id === "barad") hero.taunt = true;
-          } else {
-            alert("Aucun ennemi adjacent.");
+        }
+        // Détermine les cibles valides selon la portée
+        let candidates = [];
+        if (hero.id === "barad" || hero.id === "dunkeld") {
+          if (getDistance(hero, {x: boss?.x, y: boss?.y}) === 1 && boss && boss.hp > 0) {
+            candidates.push(boss);
+          }
+          candidates = candidates.concat(enemies.filter(enemy => enemy.hp > 0 && getDistance(enemy, hero) === 1));
+          if (candidates.length === 0) {
+            alert("Aucun ennemi ou boss à portée (distance 1).");
             return;
           }
+          // Pour les ennemis réguliers, Barad et Dunkeld tuent d'un coup,
+          // mais pour le boss, ils infligent leurs dégâts.
+          let target = candidates.find(t => t === boss) || candidates[0];
+          if (target === boss) {
+            boss.hp -= hero.damage;
+          } else {
+            target.hp = 0;
+          }
+          animateAttack();
+          if (hero.id === "barad") hero.taunt = true;
         } else if (hero.id === "gilmor") {
-          const validTargets = enemies.filter(enemy => enemy.hp > 0 &&
-            (Math.abs(enemy.x - hero.x) + Math.abs(enemy.y - hero.y)) === 4);
-          if (validTargets.length > 0) {
-            validTargets[0].hp -= hero.damage;
+          if (getDistance(hero, {x: boss?.x, y: boss?.y}) === 4 && boss && boss.hp > 0) {
+            candidates.push(boss);
+          }
+          candidates = candidates.concat(enemies.filter(enemy => enemy.hp > 0 && getDistance(enemy, hero) === 4));
+          if (candidates.length > 0) {
+            candidates[0].hp -= hero.damage;
             animateAttack();
           } else {
-            const closeEnemies = enemies.filter(enemy => enemy.hp > 0 &&
-              (Math.abs(enemy.x - hero.x) + Math.abs(enemy.y - hero.y)) < 4);
-            if (closeEnemies.length > 0 && hero.cdDefAvailable) {
+            let close = [];
+            if (boss && boss.hp > 0 && getDistance(hero, boss) < 4) {
+              close.push(boss);
+            }
+            close = close.concat(enemies.filter(enemy => enemy.hp > 0 && getDistance(enemy, hero) < 4));
+            if (close.length > 0 && hero.cdDefAvailable) {
               hero.cdDefActive = true;
               hero.cdDefAvailable = false;
               logAction(hero.name + " active CD Def : prochaine attaque ennemie bloquée.");
@@ -522,21 +555,26 @@
             }
           }
         } else if (hero.id === "grymyr") {
-          const validTargets = enemies.filter(enemy => enemy.hp > 0 &&
-            (Math.abs(enemy.x - hero.x) + Math.abs(enemy.y - hero.y)) === 3);
-          if (validTargets.length > 0) {
-            const adjacent = enemies.filter(enemy => enemy.hp > 0 &&
-              (Math.abs(enemy.x - hero.x) + Math.abs(enemy.y - hero.y)) === 1);
+          if (getDistance(hero, {x: boss?.x, y: boss?.y}) === 3 && boss && boss.hp > 0) {
+            candidates.push(boss);
+          }
+          candidates = candidates.concat(enemies.filter(enemy => enemy.hp > 0 && getDistance(enemy, hero) === 3));
+          if (candidates.length > 0) {
+            // Si 2 ennemis ou plus sont adjacents à Grymyr, il touche tous
+            let adjacent = enemies.filter(enemy => enemy.hp > 0 && getDistance(enemy, hero) === 1);
             if (adjacent.length >= 2) {
               adjacent.forEach(enemy => enemy.hp -= hero.damage);
             } else {
-              validTargets[0].hp -= hero.damage;
+              candidates[0].hp -= hero.damage;
             }
             animateAttack();
           } else {
-            const closeEnemies = enemies.filter(enemy => enemy.hp > 0 &&
-              (Math.abs(enemy.x - hero.x) + Math.abs(enemy.y - hero.y)) < 3);
-            if (closeEnemies.length > 0 && hero.cdDefAvailable) {
+            let close = [];
+            if (boss && boss.hp > 0 && getDistance(hero, boss) < 3) {
+              close.push(boss);
+            }
+            close = close.concat(enemies.filter(enemy => enemy.hp > 0 && getDistance(enemy, hero) < 3));
+            if (close.length > 0 && hero.cdDefAvailable) {
               hero.cdDefActive = true;
               hero.cdDefAvailable = false;
               logAction(hero.name + " active CD Def : prochaine attaque ennemie bloquée.");
@@ -556,7 +594,25 @@
           target.hp = Math.min(target.maxHp, target.hp + hero.heal);
         }
       }
+      // Supprimer les ennemis morts
       enemies = enemies.filter(enemy => enemy.hp > 0);
+      // Vérifier si le boss est présent et s'il a été vaincu
+      if (boss && boss.hp <= 0) {
+        // Boss vaincu : augmenter les stats de tous les personnages et des ennemis de 5%
+        heroes.forEach(hero => {
+          hero.maxHp = Math.round(hero.maxHp * 1.05);
+          hero.damage = Math.round(hero.damage * 1.05);
+          if (hero.hp > hero.maxHp) hero.hp = hero.maxHp;
+        });
+        baseEnemyHP = Math.round(baseEnemyHP * 1.05);
+        baseEnemyDamageBarad = Math.round(baseEnemyDamageBarad * 1.05);
+        baseEnemyDamageDunkeld = Math.round(baseEnemyDamageDunkeld * 1.05);
+        baseEnemyDamageOthers = Math.round(baseEnemyDamageOthers * 1.05);
+        baseEnemyDamageDefault = Math.round(baseEnemyDamageDefault * 1.05);
+        baseBossDamage = Math.round(baseBossDamage * 1.05);
+        boss = null;
+        activateDoor();
+      }
       hero.acted = true;
       selectedHeroIndex = null;
       updateHeroSelection();
@@ -593,12 +649,12 @@
 
     /* --- Gestion du boss --- */
     function spawnBoss() {
-      // Choisir une case libre aléatoirement
+      // Choisir aléatoirement une case libre
       const possibleCells = [];
-      for (let y = 1; y < gridHeight - 1; y++){
-        for (let x = 1; x < gridWidth - 1; x++){
+      for (let y = 1; y < gridHeight - 1; y++) {
+        for (let x = 1; x < gridWidth - 1; x++) {
           if (grid[y][x] === '.' && !heroes.some(hero => hero.hp > 0 && hero.x === x && hero.y === y)) {
-            possibleCells.push({x: x, y: y});
+            possibleCells.push({ x: x, y: y });
           }
         }
       }
@@ -611,7 +667,7 @@
 
     function bossTurn() {
       if (!boss) return;
-      // Boss se déplace jusqu'à 3 fois vers Barad (s'il est vivant) ou vers le héros le plus proche.
+      // Le boss se déplace jusqu'à 3 fois vers Barad s'il est vivant, sinon vers le héros le plus proche.
       for (let m = 0; m < 3; m++) {
         if (isAdjacent(boss)) break;
         const barad = heroes.find(h => h.id === "barad" && h.hp > 0);
@@ -630,16 +686,15 @@
           }
         }
       }
-      // Boss attaque s'il est adjacent à un héros.
-      const adjacentHeroes = heroes.filter(hero => hero.hp > 0 && (Math.abs(hero.x - boss.x) + Math.abs(hero.y - boss.y)) === 1);
+      // Le boss attaque s'il est adjacent à un héros (priorité à Barad)
+      const adjacentHeroes = heroes.filter(hero => hero.hp > 0 && getDistance(hero, boss) === 1);
       if (adjacentHeroes.length > 0) {
         let target = adjacentHeroes.find(hero => hero.id === "barad" && hero.hp > 0);
         if (!target) target = adjacentHeroes[0];
-        target.hp -= Math.round(boss.damage);
+        target.hp -= boss.damage;
       }
-      // Si le boss est tué
+      // Si le boss est vaincu, appliquer l'augmentation de stats
       if (boss.hp <= 0) {
-        // Augmenter les stats de 5%
         heroes.forEach(hero => {
           hero.maxHp = Math.round(hero.maxHp * 1.05);
           hero.damage = Math.round(hero.damage * 1.05);
@@ -658,25 +713,23 @@
 
     /* --- Tour des ennemis --- */
     function enemyTurn() {
-      // Si il n'y a plus d'ennemis réguliers et qu'aucun boss n'existe, spawn le boss.
+      // Si plus d'ennemis réguliers et pas de boss, spawn le boss
       if (enemies.length === 0 && !boss) {
         boss = spawnBoss();
       }
-      // Si un boss est présent, il agit.
+      // Si un boss est présent, il agit
       if (boss) {
         bossTurn();
-      }
-      // Sinon, les ennemis réguliers agissent.
-      else {
+      } else {
         enemies.forEach(enemy => {
           if (enemy.hp <= 0) return;
           for (let m = 0; m < 3; m++) {
             if (isAdjacent(enemy)) break;
             const barad = heroes.find(h => h.id === "barad" && h.hp > 0);
-            const targetHero = barad ? barad : findNearestHero(enemy);
-            if (targetHero) {
-              const dx = targetHero.x - enemy.x;
-              const dy = targetHero.y - enemy.y;
+            const target = barad ? barad : findNearestHero(enemy);
+            if (target) {
+              const dx = target.x - enemy.x;
+              const dy = target.y - enemy.y;
               const stepX = (dx !== 0) ? dx / Math.abs(dx) : 0;
               const stepY = (dy !== 0) ? dy / Math.abs(dy) : 0;
               if (canMoveForEnemy(enemy.x + stepX, enemy.y)) {
@@ -688,8 +741,7 @@
               }
             }
           }
-          const adjacentHeroes = heroes.filter(hero => hero.hp > 0 &&
-            (Math.abs(hero.x - enemy.x) + Math.abs(hero.y - enemy.y)) === 1);
+          const adjacentHeroes = heroes.filter(hero => hero.hp > 0 && getDistance(hero, enemy) === 1);
           if (adjacentHeroes.length > 0) {
             const defHero = adjacentHeroes.find(hero => hero.cdDefActive);
             if (defHero) {
@@ -716,7 +768,6 @@
         gameOver();
         return;
       }
-      // Si ni ennemis ni boss ne restent, activer la porte.
       if (enemies.length === 0 && !boss) {
         activateDoor();
       }
@@ -726,20 +777,16 @@
       render();
     }
 
-    // Vérifier si un ennemi est adjacent à un héros
+    // Vérifier si un objet (ennemi, boss) est adjacent à un héros
     function isAdjacent(entity) {
-      return heroes.some(hero => hero.hp > 0 &&
-        (Math.abs(hero.x - entity.x) + Math.abs(hero.y - entity.y)) === 1);
+      return heroes.some(hero => hero.hp > 0 && getDistance(hero, entity) === 1);
     }
 
-    // Recherche du héros vivant le plus proche d'un ennemi ou du boss
+    // Recherche du héros vivant le plus proche d'un objet (ennemi ou boss)
     function findNearestHero(entity) {
       const aliveHeroes = heroes.filter(hero => hero.hp > 0);
       if (aliveHeroes.length === 0) return null;
-      aliveHeroes.sort((a, b) =>
-        (Math.abs(a.x - entity.x) + Math.abs(a.y - entity.y)) -
-        (Math.abs(b.x - entity.x) + Math.abs(b.y - entity.y))
-      );
+      aliveHeroes.sort((a, b) => getDistance(a, entity) - getDistance(b, entity));
       return aliveHeroes[0];
     }
 
@@ -756,27 +803,26 @@
     function canMoveForEnemy(x, y) {
       if (x < 0 || x >= gridWidth || y < 0 || y >= gridHeight) return false;
       if (grid[y][x] === '#') return false;
-      return !enemies.some(enemy => enemy.hp > 0 && enemy.x === x && enemy.y === y) &&
-             !boss; // ne pas se déplacer sur le boss
+      return !enemies.some(enemy => enemy.hp > 0 && enemy.x === x && enemy.y === y) && (!boss || (boss && !(boss.x === x && boss.y === y)));
     }
 
     /* --- Activation de la porte (fin de niveau) --- */
     function activateDoor() {
       doorActive = true;
       const possibleCells = [];
-      for (let y = 1; y < gridHeight - 1; y++){
-        for (let x = 1; x < gridWidth - 1; x++){
+      for (let y = 1; y < gridHeight - 1; y++) {
+        for (let x = 1; x < gridWidth - 1; x++) {
           if (grid[y][x] === '.') {
             const occupied = heroes.some(hero => hero.hp > 0 && hero.x === x && hero.y === y);
             if (!occupied) {
-              possibleCells.push({x: x, y: y});
+              possibleCells.push({ x: x, y: y });
             }
           }
         }
       }
       if (possibleCells.length > 0) {
         const cell = possibleCells[Math.floor(Math.random() * possibleCells.length)];
-        doorPosition = {x: cell.x, y: cell.y};
+        doorPosition = { x: cell.x, y: cell.y };
       }
     }
 
@@ -812,15 +858,11 @@
     /* --- Démarrage du jeu --- */
     function startGame() {
       score = 0;
-      // Réinitialiser les héros selon leurs valeurs de base
+      // Réinitialisation des héros selon leurs valeurs de base
       heroes.forEach(hero => {
-        if (hero.id === "barad") {
-          hero.hp = 150; hero.maxHp = 150;
-        } else if (hero.id === "dunkeld") {
-          hero.hp = 100; hero.maxHp = 100;
-        } else {
-          hero.hp = 100; hero.maxHp = 100;
-        }
+        if (hero.id === "barad") { hero.hp = 150; hero.maxHp = 150; }
+        else if (hero.id === "dunkeld") { hero.hp = 100; hero.maxHp = 100; }
+        else { hero.hp = 100; hero.maxHp = 100; }
         hero.acted = false;
         hero.movesRemaining = 3;
         if (hero.id === "gilmor" || hero.id === "grymyr") {
