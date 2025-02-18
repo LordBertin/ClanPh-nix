@@ -270,11 +270,11 @@
     // Barad et Elimon échangent leurs positions, et Grymyr et Dunkeld échangent leurs positions.
     function positionHeroes() {
       const startPositions = [
-        {x: 3, y: 2}, // Pour Barad (index 0)
-        {x: 2, y: 2}, // Pour Dunkeld (index 1) -> échangé avec Grymyr
-        {x: 1, y: 2}, // Pour Gilmor (index 2)
-        {x: 2, y: 1}, // Pour Grymyr (index 3) -> échangé avec Dunkeld
-        {x: 1, y: 1}  // Pour Elimon (index 4)
+        {x: 3, y: 2}, // Barad (index 0)
+        {x: 2, y: 2}, // Dunkeld (index 1) -> échangé avec Grymyr
+        {x: 1, y: 2}, // Gilmor (index 2)
+        {x: 2, y: 1}, // Grymyr (index 3) -> échangé avec Dunkeld
+        {x: 1, y: 1}  // Elimon (index 4)
       ];
       heroes.forEach((hero, i) => {
         if (hero.hp > 0) {
@@ -474,7 +474,7 @@
           const candidates = enemies.filter(enemy => enemy.hp > 0 &&
             (Math.abs(enemy.x - hero.x) + Math.abs(enemy.y - hero.y)) === 1);
           if (candidates.length > 0) {
-            candidates[0].hp = 0; // Ennemi tué en une attaque
+            candidates[0].hp = 0;
             animateAttack();
             if (hero.id === "barad") hero.taunt = true;
           } else {
@@ -701,7 +701,9 @@
       const overlay = document.createElement('div');
       overlay.className = "attackOverlay";
       board.appendChild(overlay);
-      setTimeout(() => { board.removeChild(overlay); }, 300);
+      setTimeout(() => {
+        board.removeChild(overlay);
+      }, 300);
     }
 
     // Log dans la console
