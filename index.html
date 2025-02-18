@@ -219,14 +219,14 @@
     // - Barad : 150 PV, 25 dégâts, perd 15 PV s'il est attaqué, bouton "Coup de Bouclier"
     // - Dunkeld : 100 PV, 75 dégâts, perd 20 PV s'il est attaqué, bouton "Marteau du Courroux"
     // - Gilmor : 100 PV, 50 dégâts, perd 25 PV s'il est attaqué, bouton "Visée", doit être à distance 4 (3 cases vides)
-    // - Grymyr : 100 PV, 50 dégâts, perd 25 PV s'il est attaqué, bouton "Chaîne d'Éclairs", doit être à distance 3 (2 cases vides); si 2 ennemis ou plus sont adjacents, il touche tous
+    // - Grymyr : 100 PV, 50 dégâts, perd 25 PV s'il est attaqué, bouton "Chaîne d'Éclairs", doit être à distance 3 (2 cases vides); s'il y a 2 ennemis ou plus adjacents, il touche tous
     // - Elimon : 100 PV, soin de 40, ne peut qu'être soigné (bouton "Soigner" cible le personnage ayant le moins de PV)
     let heroes = [
-      { id: 'barad', name: 'Barad', initial: 'B', color: 'red',    hp: 150, maxHp: 150, x: 1, y: 1, range: 1, damage: 25, taunt: false, acted: false, movesRemaining: 3 },
-      { id: 'dunkeld', name: 'Dunkeld', initial: 'D', color: 'gold',  hp: 100, maxHp: 100, x: 2, y: 1, range: 1, damage: 75, acted: false, movesRemaining: 3 },
-      { id: 'gilmor', name: 'Gilmor', initial: 'G', color: 'green',  hp: 100, maxHp: 100, x: 1, y: 2, range: 4, damage: 50, acted: false, movesRemaining: 3, cdDefAvailable: true, cdDefActive: false },
-      { id: 'grymyr', name: 'Grymyr', initial: 'G', color: 'skyblue', hp: 100, maxHp: 100, x: 2, y: 2, range: 3, damage: 50, acted: false, movesRemaining: 3, cdDefAvailable: true, cdDefActive: false },
-      { id: 'elimon', name: 'Elimon', initial: 'E', color: 'white',  hp: 100, maxHp: 100, x: 3, y: 2, range: 1, heal: 40, acted: false, movesRemaining: 3 }
+      { id: 'barad', name: 'Barad', initial: 'B', color: 'red',    hp: 150, maxHp: 150, x: 0, y: 0, range: 1, damage: 25, taunt: false, acted: false, movesRemaining: 3 },
+      { id: 'dunkeld', name: 'Dunkeld', initial: 'D', color: 'gold',  hp: 100, maxHp: 100, x: 0, y: 0, range: 1, damage: 75, acted: false, movesRemaining: 3 },
+      { id: 'gilmor', name: 'Gilmor', initial: 'G', color: 'green',  hp: 100, maxHp: 100, x: 0, y: 0, range: 4, damage: 50, acted: false, movesRemaining: 3, cdDefAvailable: true, cdDefActive: false },
+      { id: 'grymyr', name: 'Grymyr', initial: 'G', color: 'skyblue', hp: 100, maxHp: 100, x: 0, y: 0, range: 3, damage: 50, acted: false, movesRemaining: 3, cdDefAvailable: true, cdDefActive: false },
+      { id: 'elimon', name: 'Elimon', initial: 'E', color: 'white',  hp: 100, maxHp: 100, x: 0, y: 0, range: 1, heal: 40, acted: false, movesRemaining: 3 }
     ];
 
     // Index du héros sélectionné pour agir
@@ -266,14 +266,15 @@
       }
     }
 
-    // Positionner les héros dans la zone de départ et réinitialiser leur statut et déplacements
+    // Positionnement des héros avec positions de départ modifiées :
+    // Barad et Elimon échangent leurs positions, et Grymyr et Dunkeld échangent leurs positions.
     function positionHeroes() {
       const startPositions = [
-        {x: 1, y: 1},
-        {x: 2, y: 1},
-        {x: 1, y: 2},
-        {x: 2, y: 2},
-        {x: 3, y: 2}
+        {x: 3, y: 2}, // Pour Barad (index 0)
+        {x: 2, y: 2}, // Pour Dunkeld (index 1) -> échangé avec Grymyr
+        {x: 1, y: 2}, // Pour Gilmor (index 2)
+        {x: 2, y: 1}, // Pour Grymyr (index 3) -> échangé avec Dunkeld
+        {x: 1, y: 1}  // Pour Elimon (index 4)
       ];
       heroes.forEach((hero, i) => {
         if (hero.hp > 0) {
@@ -432,7 +433,6 @@
         return;
       }
       const hero = heroes[selectedHeroIndex];
-      // Si des ennemis existent encore, limiter aux 3 déplacements
       if (enemies.length > 0 && hero.movesRemaining <= 0) {
         alert("Ce héros a déjà effectué ses 3 déplacements pour ce tour.");
         return;
@@ -474,7 +474,7 @@
           const candidates = enemies.filter(enemy => enemy.hp > 0 &&
             (Math.abs(enemy.x - hero.x) + Math.abs(enemy.y - hero.y)) === 1);
           if (candidates.length > 0) {
-            candidates[0].hp = 0; // L'ennemi est tué en une attaque
+            candidates[0].hp = 0; // Ennemi tué en une attaque
             animateAttack();
             if (hero.id === "barad") hero.taunt = true;
           } else {
@@ -544,7 +544,7 @@
       render();
     }
 
-    // Permet de passer le tour pour le héros sélectionné
+    // Passage du tour pour le héros sélectionné
     function passTurn() {
       if (selectedHeroIndex === null) {
         alert("Veuillez sélectionner un héros pour agir.");
