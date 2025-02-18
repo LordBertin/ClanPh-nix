@@ -63,4 +63,704 @@
     #infoPage p {
       font-size: 1.2em;
       max-width: 90%;
-      margin-bottom
+      margin-bottom: 1em;
+    }
+    /* Zone de jeu */
+    #game {
+      display: none;
+      padding: 0.5em;
+      position: relative;
+      z-index: 1;
+    }
+    #board {
+      background: #000;
+      color: #0f0;
+      font-size: 1.2em;
+      line-height: 1.2em;
+      white-space: pre;
+      margin: 0 auto;
+      max-width: 100%;
+      position: relative;
+    }
+    /* Animation d'attaque */
+    .attackOverlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(255,255,0,0.5);
+      pointer-events: none;
+      animation: flash 0.3s ease-out;
+    }
+    @keyframes flash {
+      from { opacity: 1; }
+      to { opacity: 0; }
+    }
+    #info {
+      margin: 0.5em 0;
+      font-size: 1.2em;
+      text-align: center;
+    }
+    #controls {
+      margin-top: 0.5em;
+      text-align: center;
+    }
+    #moveControls {
+      margin-bottom: 0.5em;
+    }
+    /* Panneau de sélection des héros */
+    #heroSelection {
+      margin-bottom: 0.5em;
+      text-align: center;
+    }
+    .hero-option {
+      display: inline-block;
+      padding: 5px 10px;
+      margin: 0 5px;
+      border: 1px solid #0f0;
+      cursor: pointer;
+    }
+    .hero-selected {
+      background: rgba(255,255,255,0.3);
+    }
+    .hero-acted {
+      opacity: 0.5;
+      pointer-events: none;
+    }
+    /* Écran Game Over */
+    #gameOver {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #000;
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 3;
+    }
+    #gameOver h1 {
+      font-size: 3em;
+      margin-bottom: 1em;
+    }
+    #gameOver p {
+      font-size: 1.5em;
+    }
+  </style>
+</head>
+<body>
+  <!-- Écran d'accueil -->
+  <div id="menu">
+    <h1>Le Clan Phénix</h1>
+    <button id="startButton">Démarrer</button>
+    <button id="infosButton">Infos</button>
+  </div>
+
+  <!-- Page d'infos -->
+  <div id="infoPage">
+    <p>
+      Bienvenue dans les Donjons du Clan Phénix !<br><br>
+      Pour affronter les hordes d’ennemis qui vous guettent, chaque personnage à le droit à 3 déplacements et une attaque.<br><br>
+      Barad le Guerrier a le plus de points de vie et sert de rempart.<br>
+      Dunkeld le Paladin, fait appel à la Lumière pour attaquer ses ennemis au corps à corps.<br>
+      Grymyr le Chaman attaque à distance les groupes d’ennemis.<br>
+      Gilmor le Chasseur est le spécialiste du combat à distance.<br>
+      Elimon le Prêtre soigne ses alliés.<br><br>
+      Arriveront-ils à affronter les dangers peuplant ces infâmes donjons ?
+    </p>
+    <button id="retourButton">Retour</button>
+  </div>
+
+  <!-- Zone de jeu -->
+  <div id="game">
+    <!-- Panneau de sélection des héros -->
+    <div id="heroSelection"></div>
+    <!-- Plateau ASCII -->
+    <pre id="board"></pre>
+    <!-- Informations -->
+    <div id="info"></div>
+    <!-- Contrôles -->
+    <div id="controls">
+      <div id="moveControls">
+        <button id="upButton">↑</button><br>
+        <button id="leftButton">←</button>
+        <button id="downButton">↓</button>
+        <button id="rightButton">→</button>
+      </div>
+      <div id="actionControls">
+        <button id="attackButton">Attaquer</button>
+        <button id="healButton">Soigner</button>
+        <button id="passButton">Passer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Écran de fin de partie -->
+  <div id="gameOver">
+    <h1>Game Over</h1>
+    <p id="scoreText"></p>
+    <button id="restartButton">Recommencer</button>
+  </div>
+
+  <script>
+    /* --- Variables globales --- */
+    const gridWidth = 30;
+    const gridHeight = 15;
+    let grid = [];  // grille du niveau
+    let doorActive = false;
+    let doorPosition = {x: -1, y: -1};
+    let enemies = [];
+    let score = 0;
+
+    // Définition des héros
+    // - Barad : 150 PV, 25 dégâts, perd 15 PV s'il est attaqué, bouton "Coup de Bouclier"
+    // - Dunkeld : 100 PV, 75 dégâts, perd 20 PV s'il est attaqué, bouton "Marteau du Courroux"
+    // - Gilmor : 100 PV, 50 dégâts, perd 25 PV s'il est attaqué, bouton "Visée", doit être à distance 4 (3 cases vides)
+    // - Grymyr : 100 PV, 50 dégâts, perd 25 PV s'il est attaqué, bouton "Chaîne d'Éclairs", doit être à distance 3 (2 cases vides); si 2 ennemis ou plus sont adjacents, il touche tous
+    // - Elimon : 100 PV, soin de 40, ne peut qu'être soigné (bouton "Soigner" cible le personnage ayant le moins de PV)
+    let heroes = [
+      { id: 'barad', name: 'Barad', initial: 'B', color: 'red',    hp: 150, maxHp: 150, x: 1, y: 1, range: 1, damage: 25, taunt: false, acted: false, movesRemaining: 3 },
+      { id: 'dunkeld', name: 'Dunkeld', initial: 'D', color: 'gold',  hp: 100, maxHp: 100, x: 2, y: 1, range: 1, damage: 75, acted: false, movesRemaining: 3 },
+      { id: 'gilmor', name: 'Gilmor', initial: 'G', color: 'green',  hp: 100, maxHp: 100, x: 1, y: 2, range: 4, damage: 50, acted: false, movesRemaining: 3, cdDefAvailable: true, cdDefActive: false },
+      { id: 'grymyr', name: 'Grymyr', initial: 'G', color: 'skyblue', hp: 100, maxHp: 100, x: 2, y: 2, range: 3, damage: 50, acted: false, movesRemaining: 3, cdDefAvailable: true, cdDefActive: false },
+      { id: 'elimon', name: 'Elimon', initial: 'E', color: 'white',  hp: 100, maxHp: 100, x: 3, y: 2, range: 1, heal: 40, acted: false, movesRemaining: 3 }
+    ];
+
+    // Index du héros sélectionné pour agir
+    let selectedHeroIndex = null;
+
+    /* --- Génération du niveau --- */
+    function generateLevel() {
+      grid = [];
+      for (let y = 0; y < gridHeight; y++){
+        grid[y] = [];
+        for (let x = 0; x < gridWidth; x++){
+          if (y === 0 || y === gridHeight - 1 || x === 0 || x === gridWidth - 1) {
+            grid[y][x] = '#';
+          } else {
+            grid[y][x] = (Math.random() < 0.15) ? '#' : '.';
+          }
+        }
+      }
+      // Nettoyer la zone de départ
+      for (let y = 1; y < 4; y++){
+        for (let x = 1; x < 6; x++){
+          grid[y][x] = '.';
+        }
+      }
+      doorActive = false;
+      doorPosition = {x: -1, y: -1};
+
+      // Placer quelques ennemis (ici 5 par niveau, chacun avec 100 PV)
+      enemies = [];
+      for (let i = 0; i < 5; i++){
+        let ex, ey;
+        do {
+          ex = Math.floor(Math.random() * gridWidth);
+          ey = Math.floor(Math.random() * gridHeight);
+        } while (grid[ey][ex] !== '.' || (ex < 6 && ey < 6));
+        enemies.push({x: ex, y: ey, hp: 100});
+      }
+    }
+
+    // Positionner les héros dans la zone de départ et réinitialiser leur statut et déplacements
+    function positionHeroes() {
+      const startPositions = [
+        {x: 1, y: 1},
+        {x: 2, y: 1},
+        {x: 1, y: 2},
+        {x: 2, y: 2},
+        {x: 3, y: 2}
+      ];
+      heroes.forEach((hero, i) => {
+        if (hero.hp > 0) {
+          hero.x = startPositions[i].x;
+          hero.y = startPositions[i].y;
+          hero.acted = false;
+          hero.movesRemaining = 3;
+          if (hero.id === "gilmor" || hero.id === "grymyr") {
+            hero.cdDefAvailable = true;
+            hero.cdDefActive = false;
+          }
+        }
+      });
+      selectedHeroIndex = null;
+      updateHeroSelection();
+    }
+
+    /* --- Rendu du plateau en ASCII --- */
+    function render() {
+      let displayGrid = [];
+      for (let y = 0; y < gridHeight; y++){
+        displayGrid[y] = [];
+        for (let x = 0; x < gridWidth; x++){
+          displayGrid[y][x] = grid[y][x];
+        }
+      }
+      if (doorActive) {
+        displayGrid[doorPosition.y][doorPosition.x] = 'O';
+      }
+      enemies.forEach(enemy => {
+        if (enemy.hp > 0) {
+          let color = (enemy.hp <= 50) ? "lightcoral" : "red";
+          displayGrid[enemy.y][enemy.x] = `<span style="color: ${color};">x</span>`;
+        }
+      });
+      heroes.forEach((hero, index) => {
+        if (hero.hp > 0) {
+          let highlight = (index === selectedHeroIndex) ? 'background: rgba(255,255,255,0.3);' : '';
+          displayGrid[hero.y][hero.x] = `<span style="color:${hero.color};${highlight}">${hero.initial}</span>`;
+        }
+      });
+      let boardHtml = "";
+      for (let y = 0; y < gridHeight; y++){
+        for (let x = 0; x < gridWidth; x++){
+          boardHtml += displayGrid[y][x];
+        }
+        boardHtml += "\n";
+      }
+      document.getElementById('board').innerHTML = boardHtml;
+      updateInfo();
+      updateControls();
+    }
+
+    // Mise à jour des informations affichées
+    function updateInfo() {
+      const infoDiv = document.getElementById('info');
+      let infoText = "";
+      if (selectedHeroIndex !== null) {
+        const hero = heroes[selectedHeroIndex];
+        infoText += `Héros sélectionné : ${hero.name} (HP : ${hero.hp}/${hero.maxHp}, Déplacements restants : ${hero.movesRemaining})`;
+      } else {
+        infoText += "Sélectionnez un héros pour agir.";
+      }
+      infoText += `<br>Donjons terminés : ${score}`;
+      infoDiv.innerHTML = infoText;
+    }
+
+    // Mise à jour du panneau de sélection des héros
+    function updateHeroSelection() {
+      const container = document.getElementById('heroSelection');
+      container.innerHTML = "";
+      heroes.forEach((hero, index) => {
+        if (hero.hp <= 0) return;
+        const heroDiv = document.createElement('span');
+        heroDiv.classList.add('hero-option');
+        heroDiv.style.color = hero.color;
+        heroDiv.textContent = `${hero.name} (${hero.hp})`;
+        if (index === selectedHeroIndex) {
+          heroDiv.classList.add('hero-selected');
+        }
+        if (hero.acted) {
+          heroDiv.classList.add('hero-acted');
+        }
+        heroDiv.onclick = () => {
+          if (!hero.acted) {
+            selectedHeroIndex = index;
+            updateHeroSelection();
+            updateInfo();
+          }
+        };
+        container.appendChild(heroDiv);
+      });
+    }
+
+    // Mise à jour des contrôles d'action en fonction du héros sélectionné
+    function updateControls() {
+      const attackButton = document.getElementById('attackButton');
+      const hero = (selectedHeroIndex !== null) ? heroes[selectedHeroIndex] : null;
+      if (!hero) {
+        attackButton.disabled = true;
+        attackButton.textContent = "Attaquer";
+        return;
+      }
+      if (hero.id === "barad") {
+        attackButton.textContent = "Coup de Bouclier";
+      } else if (hero.id === "dunkeld") {
+        attackButton.textContent = "Marteau du Courroux";
+      } else if (hero.id === "gilmor") {
+        attackButton.textContent = "Visée";
+      } else if (hero.id === "grymyr") {
+        attackButton.textContent = "Chaîne d'Éclairs";
+      }
+      if (hero.id === "elimon") {
+        attackButton.disabled = true;
+      } else if (hero.id === "barad" || hero.id === "dunkeld") {
+        const validTargets = enemies.filter(enemy => enemy.hp > 0 &&
+          (Math.abs(enemy.x - hero.x) + Math.abs(enemy.y - hero.y)) === 1);
+        attackButton.disabled = (validTargets.length === 0);
+      } else if (hero.id === "gilmor") {
+        const validTargets = enemies.filter(enemy => enemy.hp > 0 &&
+          (Math.abs(enemy.x - hero.x) + Math.abs(enemy.y - hero.y)) === 4);
+        if (validTargets.length > 0) {
+          attackButton.disabled = false;
+        } else {
+          const closeEnemies = enemies.filter(enemy => enemy.hp > 0 &&
+            (Math.abs(enemy.x - hero.x) + Math.abs(enemy.y - hero.y)) < 4);
+          if (closeEnemies.length > 0 && hero.cdDefAvailable) {
+            attackButton.disabled = false;
+            attackButton.textContent = "CD Def";
+          } else {
+            attackButton.disabled = true;
+          }
+        }
+      } else if (hero.id === "grymyr") {
+        const validTargets = enemies.filter(enemy => enemy.hp > 0 &&
+          (Math.abs(enemy.x - hero.x) + Math.abs(enemy.y - hero.y)) === 3);
+        if (validTargets.length > 0) {
+          attackButton.disabled = false;
+        } else {
+          const closeEnemies = enemies.filter(enemy => enemy.hp > 0 &&
+            (Math.abs(enemy.x - hero.x) + Math.abs(enemy.y - hero.y)) < 3);
+          if (closeEnemies.length > 0 && hero.cdDefAvailable) {
+            attackButton.disabled = false;
+            attackButton.textContent = "CD Def";
+          } else {
+            attackButton.disabled = true;
+          }
+        }
+      }
+    }
+
+    // Gestion du déplacement
+    function handleMove(direction) {
+      if (selectedHeroIndex === null) {
+        alert("Veuillez sélectionner un héros pour agir.");
+        return;
+      }
+      const hero = heroes[selectedHeroIndex];
+      // Si des ennemis existent encore, limiter aux 3 déplacements
+      if (enemies.length > 0 && hero.movesRemaining <= 0) {
+        alert("Ce héros a déjà effectué ses 3 déplacements pour ce tour.");
+        return;
+      }
+      let newX = hero.x;
+      let newY = hero.y;
+      if (direction === "up") newY--;
+      else if (direction === "down") newY++;
+      else if (direction === "left") newX--;
+      else if (direction === "right") newX++;
+      if (newX < 0 || newX >= gridWidth || newY < 0 || newY >= gridHeight) return;
+      if (grid[newY][newX] === '#') return;
+      if (heroes.some((h, i) => h.hp > 0 && i !== selectedHeroIndex && h.x === newX && h.y === newY)) return;
+      hero.x = newX;
+      hero.y = newY;
+      if (enemies.length > 0) {
+        hero.movesRemaining--;
+      }
+      if (doorActive && newX === doorPosition.x && newY === doorPosition.y) {
+        completeLevel();
+        return;
+      }
+      render();
+    }
+
+    // Gestion de l'action (attaque ou soin)
+    function handleAction(action) {
+      if (selectedHeroIndex === null) {
+        alert("Veuillez sélectionner un héros pour agir.");
+        return;
+      }
+      const hero = heroes[selectedHeroIndex];
+      if (hero.hp <= 0) return;
+      if (action === "attack") {
+        if (hero.id === "elimon") {
+          alert("Elimon ne peut pas attaquer. Utilisez Soigner.");
+          return;
+        } else if (hero.id === "barad" || hero.id === "dunkeld") {
+          const candidates = enemies.filter(enemy => enemy.hp > 0 &&
+            (Math.abs(enemy.x - hero.x) + Math.abs(enemy.y - hero.y)) === 1);
+          if (candidates.length > 0) {
+            candidates[0].hp = 0; // L'ennemi est tué en une attaque
+            animateAttack();
+            if (hero.id === "barad") hero.taunt = true;
+          } else {
+            alert("Aucun ennemi adjacent.");
+            return;
+          }
+        } else if (hero.id === "gilmor") {
+          const validTargets = enemies.filter(enemy => enemy.hp > 0 &&
+            (Math.abs(enemy.x - hero.x) + Math.abs(enemy.y - hero.y)) === 4);
+          if (validTargets.length > 0) {
+            validTargets[0].hp -= hero.damage;
+            animateAttack();
+          } else {
+            const closeEnemies = enemies.filter(enemy => enemy.hp > 0 &&
+              (Math.abs(enemy.x - hero.x) + Math.abs(enemy.y - hero.y)) < 4);
+            if (closeEnemies.length > 0 && hero.cdDefAvailable) {
+              hero.cdDefActive = true;
+              hero.cdDefAvailable = false;
+              logAction(hero.name + " active CD Def : prochaine attaque ennemie bloquée.");
+            } else {
+              alert("Aucune cible valide ou CD Def déjà utilisé.");
+              return;
+            }
+          }
+        } else if (hero.id === "grymyr") {
+          const validTargets = enemies.filter(enemy => enemy.hp > 0 &&
+            (Math.abs(enemy.x - hero.x) + Math.abs(enemy.y - hero.y)) === 3);
+          if (validTargets.length > 0) {
+            const adjacent = enemies.filter(enemy => enemy.hp > 0 &&
+              (Math.abs(enemy.x - hero.x) + Math.abs(enemy.y - hero.y)) === 1);
+            if (adjacent.length >= 2) {
+              adjacent.forEach(enemy => enemy.hp -= hero.damage);
+            } else {
+              validTargets[0].hp -= hero.damage;
+            }
+            animateAttack();
+          } else {
+            const closeEnemies = enemies.filter(enemy => enemy.hp > 0 &&
+              (Math.abs(enemy.x - hero.x) + Math.abs(enemy.y - hero.y)) < 3);
+            if (closeEnemies.length > 0 && hero.cdDefAvailable) {
+              hero.cdDefActive = true;
+              hero.cdDefAvailable = false;
+              logAction(hero.name + " active CD Def : prochaine attaque ennemie bloquée.");
+            } else {
+              alert("Aucune cible valide ou CD Def déjà utilisé.");
+              return;
+            }
+          }
+        }
+      } else if (action === "heal") {
+        if (hero.id === "elimon") {
+          const target = findAllyToHeal(hero);
+          if (target) {
+            target.hp = Math.min(target.maxHp, target.hp + hero.heal);
+          }
+        } else {
+          hero.hp = Math.min(hero.maxHp, hero.hp + 10);
+        }
+      }
+      enemies = enemies.filter(enemy => enemy.hp > 0);
+      hero.acted = true;
+      selectedHeroIndex = null;
+      updateHeroSelection();
+      if (heroes.filter(h => h.hp > 0 && !h.acted).length === 0) {
+        enemyTurn();
+      }
+      render();
+    }
+
+    // Permet de passer le tour pour le héros sélectionné
+    function passTurn() {
+      if (selectedHeroIndex === null) {
+        alert("Veuillez sélectionner un héros pour agir.");
+        return;
+      }
+      const hero = heroes[selectedHeroIndex];
+      logAction(hero.name + " passe son tour.");
+      hero.acted = true;
+      selectedHeroIndex = null;
+      updateHeroSelection();
+      if (heroes.filter(h => h.hp > 0 && !h.acted).length === 0) {
+        enemyTurn();
+      }
+      render();
+    }
+
+    // Pour Elimon : trouver l'allié le plus blessé (ou lui-même)
+    function findAllyToHeal(hero) {
+      const injured = heroes.filter(h => h.hp > 0 && h.hp < h.maxHp);
+      if (injured.length === 0) return hero;
+      injured.sort((a, b) => a.hp - b.hp);
+      return injured[0];
+    }
+
+    /* --- Tour des ennemis --- */
+    function enemyTurn() {
+      enemies.forEach(enemy => {
+        if (enemy.hp <= 0) return;
+        for (let m = 0; m < 3; m++) {
+          if (isAdjacent(enemy)) break;
+          const barad = heroes.find(h => h.id === "barad" && h.hp > 0);
+          const targetHero = barad ? barad : findNearestHero(enemy);
+          if (targetHero) {
+            const dx = targetHero.x - enemy.x;
+            const dy = targetHero.y - enemy.y;
+            const stepX = (dx !== 0) ? dx / Math.abs(dx) : 0;
+            const stepY = (dy !== 0) ? dy / Math.abs(dy) : 0;
+            if (canMoveForEnemy(enemy.x + stepX, enemy.y)) {
+              enemy.x += stepX;
+            } else if (canMoveForEnemy(enemy.x, enemy.y + stepY)) {
+              enemy.y += stepY;
+            } else {
+              break;
+            }
+          }
+        }
+        const adjacentHeroes = heroes.filter(hero => hero.hp > 0 &&
+          (Math.abs(hero.x - enemy.x) + Math.abs(hero.y - enemy.y)) === 1);
+        if (adjacentHeroes.length > 0) {
+          const defHero = adjacentHeroes.find(hero => hero.cdDefActive);
+          if (defHero) {
+            logAction("L'attaque ennemie contre " + defHero.name + " a été bloquée par CD Def.");
+            defHero.cdDefActive = false;
+          } else {
+            let target = adjacentHeroes.find(hero => hero.id === "barad" && hero.taunt);
+            if (!target) target = adjacentHeroes[0];
+            if (target.id === "barad") {
+              target.hp -= 15;
+            } else if (target.id === "dunkeld") {
+              target.hp -= 20;
+            } else if (target.id === "gilmor" || target.id === "grymyr") {
+              target.hp -= 25;
+            } else {
+              target.hp -= 10;
+            }
+          }
+        }
+      });
+      heroes.forEach(hero => { if (hero.id === "barad") hero.taunt = false; });
+      if (heroes.every(hero => hero.hp <= 0)) {
+        gameOver();
+        return;
+      }
+      if (enemies.length === 0 || enemies.every(enemy => enemy.hp <= 0)) {
+        if (!doorActive) activateDoor();
+      }
+      heroes.forEach(hero => { if (hero.hp > 0) { hero.acted = false; hero.movesRemaining = 3; } });
+      selectedHeroIndex = null;
+      updateHeroSelection();
+      render();
+    }
+
+    // Vérifier si un ennemi est adjacent à un héros
+    function isAdjacent(enemy) {
+      return heroes.some(hero => hero.hp > 0 &&
+        (Math.abs(hero.x - enemy.x) + Math.abs(hero.y - enemy.y)) === 1);
+    }
+
+    // Recherche du héros vivant le plus proche d'un ennemi
+    function findNearestHero(enemy) {
+      const aliveHeroes = heroes.filter(hero => hero.hp > 0);
+      if (aliveHeroes.length === 0) return null;
+      aliveHeroes.sort((a, b) =>
+        (Math.abs(a.x - enemy.x) + Math.abs(a.y - enemy.y)) -
+        (Math.abs(b.x - enemy.x) + Math.abs(b.y - enemy.y))
+      );
+      return aliveHeroes[0];
+    }
+
+    // Vérifier si une case est libre pour un héros
+    function canMove(x, y) {
+      if (x < 0 || x >= gridWidth || y < 0 || y >= gridHeight) return false;
+      if (grid[y][x] === '#') return false;
+      const occupiedByEnemy = enemies.some(enemy => enemy.hp > 0 && enemy.x === x && enemy.y === y);
+      const occupiedByHero = heroes.some(hero => hero.hp > 0 && hero.x === x && hero.y === y);
+      return !occupiedByEnemy && !occupiedByHero;
+    }
+
+    // Vérifier si une case est libre pour un ennemi
+    function canMoveForEnemy(x, y) {
+      if (x < 0 || x >= gridWidth || y < 0 || y >= gridHeight) return false;
+      if (grid[y][x] === '#') return false;
+      return !enemies.some(enemy => enemy.hp > 0 && enemy.x === x && enemy.y === y);
+    }
+
+    /* --- Activation de la porte (fin de niveau) --- */
+    function activateDoor() {
+      doorActive = true;
+      const possibleCells = [];
+      for (let y = 1; y < gridHeight - 1; y++){
+        for (let x = 1; x < gridWidth - 1; x++){
+          if (grid[y][x] === '.') {
+            const occupied = heroes.some(hero => hero.hp > 0 && hero.x === x && hero.y === y);
+            if (!occupied) {
+              possibleCells.push({x: x, y: y});
+            }
+          }
+        }
+      }
+      if (possibleCells.length > 0) {
+        const cell = possibleCells[Math.floor(Math.random() * possibleCells.length)];
+        doorPosition = {x: cell.x, y: cell.y};
+      }
+    }
+
+    /* --- Passage au niveau suivant --- */
+    function completeLevel() {
+      score++;
+      generateLevel();
+      positionHeroes();
+      render();
+    }
+
+    /* --- Fin de partie --- */
+    function gameOver() {
+      document.getElementById('game').style.display = "none";
+      document.getElementById('gameOver').style.display = "flex";
+      document.getElementById('scoreText').innerText = "Vous avez terminé " + score + " donjons.";
+    }
+
+    // Animation d'attaque rapide
+    function animateAttack() {
+      const board = document.getElementById('board');
+      const overlay = document.createElement('div');
+      overlay.className = "attackOverlay";
+      board.appendChild(overlay);
+      setTimeout(() => { board.removeChild(overlay); }, 300);
+    }
+
+    // Log dans la console
+    function logAction(message) {
+      console.log(message);
+    }
+
+    /* --- Démarrage du jeu --- */
+    function startGame() {
+      score = 0;
+      heroes.forEach(hero => {
+        if (hero.id === "barad") {
+          hero.hp = 150;
+          hero.maxHp = 150;
+        } else if (hero.id === "dunkeld") {
+          hero.hp = 100;
+          hero.maxHp = 100;
+        } else if (hero.id === "gilmor" || hero.id === "grymyr" || hero.id === "elimon") {
+          hero.hp = 100;
+          hero.maxHp = 100;
+        }
+        hero.acted = false;
+        hero.movesRemaining = 3;
+        if (hero.id === "gilmor" || hero.id === "grymyr") {
+          hero.cdDefAvailable = true;
+          hero.cdDefActive = false;
+        }
+      });
+      generateLevel();
+      positionHeroes();
+      selectedHeroIndex = null;
+      document.getElementById('menu').style.display = "none";
+      document.getElementById('infoPage').style.display = "none";
+      document.getElementById('gameOver').style.display = "none";
+      document.getElementById('game').style.display = "block";
+      render();
+    }
+
+    /* --- Écouteurs d'événements --- */
+    document.getElementById('upButton').addEventListener('click', () => { handleMove("up"); });
+    document.getElementById('downButton').addEventListener('click', () => { handleMove("down"); });
+    document.getElementById('leftButton').addEventListener('click', () => { handleMove("left"); });
+    document.getElementById('rightButton').addEventListener('click', () => { handleMove("right"); });
+    document.getElementById('attackButton').addEventListener('click', () => { handleAction("attack"); });
+    document.getElementById('healButton').addEventListener('click', () => { handleAction("heal"); });
+    document.getElementById('passButton').addEventListener('click', () => { passTurn(); });
+    document.getElementById('startButton').addEventListener('click', startGame);
+    document.getElementById('restartButton').addEventListener('click', () => {
+      document.getElementById('gameOver').style.display = "none";
+      startGame();
+    });
+    document.getElementById('infosButton').addEventListener('click', () => {
+      document.getElementById('menu').style.display = "none";
+      document.getElementById('infoPage').style.display = "flex";
+    });
+    document.getElementById('retourButton').addEventListener('click', () => {
+      document.getElementById('infoPage').style.display = "none";
+      document.getElementById('menu').style.display = "flex";
+    });
+  </script>
+</body>
+</html>
